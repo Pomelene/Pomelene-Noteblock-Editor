@@ -1,0 +1,9 @@
+saveExact: true
+storeDir: ../tooling/pnpm-store
+cacheDir: ../tooling/pnpm-cache
+allowBuilds:
+  electron: true
+  esbuild: true
+  electron-winstaller: false
+minimumReleaseAgeExclude:
+  - electron@44.8.0
