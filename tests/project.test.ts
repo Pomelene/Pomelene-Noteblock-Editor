@@ -40,7 +40,7 @@ describe('authoritative project session', () => {
   it.each([
     { type: 'add-note', patternId: 'p1', tick: -1, layer: 0, pitch: 60, instrument: 0, velocity: 80 },
     { type: 'add-note', patternId: 'p1', tick: 1, layer: 0, pitch: 109, instrument: 0, velocity: 80 },
-    { type: 'add-note', patternId: 'p1', tick: 1, layer: 0, pitch: 60, instrument: 99, velocity: 80 },
+    { type: 'add-note', patternId: 'p1', tick: 1, layer: 0, pitch: 60, instrument: 256, velocity: 80 },
     { type: 'move-notes', patternId: 'p1', ids: ['n1'], ticks: 4, pitches: 0, layers: 1 },
     { type: 'set-tempo', bpm: NaN, meter: '4/4' },
     { type: 'delete-notes', patternId: 'p1', ids: ['does-not-exist'] }

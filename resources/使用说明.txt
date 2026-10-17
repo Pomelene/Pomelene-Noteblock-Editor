@@ -1,0 +1,18 @@
+NoteBlock Editor 0.2.0 · Windows x64
+
+请完整解压运行包，再打开 NoteBlock Editor.exe。保留同目录的 DLL、resources 和 locales 等文件。
+
+打开：Ctrl+O，读取 .nbs 或 .nbproject。
+保存工程：Ctrl+S；另存：Ctrl+Shift+S。工程文件保留 Pattern 和编排关系。
+导出 NBS：Ctrl+E，导出 Playlist 中实际放置的乐段。编辑器会提示速度/拍号转换。
+
+左侧选择 Pattern 后可在编排区点击放置，或直接拖入；默认按 1 tick 移动。
+双击 Pattern 打开编辑器；音色、音高、力度、声像、微调在编辑器内设置。
+Shift 框选，Ctrl+C / X / V 复制剪切粘贴，Delete 删除，Ctrl+Z 撤销。
+SONG 播放编排，PAT 播放所选 Pattern；空格播放 / 停止。
+更多操作见窗口右上角“？”（F1）。
+
+外部自定义采样/资源包加载、MIDI 导入与自动编曲尚未接入。
+旧 NBS 的自定义音色定义会保留；缺少其采样时会明确提示。
+
+源代码另行提供于 NoteBlockEditor-0.2.0-source.zip。

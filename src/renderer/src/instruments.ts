@@ -5,4 +5,4 @@ export const instruments = [
   ['迪吉里杜管', 'didgeridoo', '#af8c79'], ['方波', 'bit', '#a49ac5'], ['班卓琴', 'banjo', '#b8ae8c'], ['电钢琴', 'pling', '#8aaec4']
 ] as const
 export const pitchName = (midi: number) => ['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'][((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1)
-export const ticksPerBar = (meter: string) => meter === '3/4' || meter === '6/8' ? 12 : 16
+export const ticksPerBar = (meter: string) => {const [n,d]=meter.split('/').map(Number);return n*16/d}

@@ -1,17 +1,25 @@
 import { randomUUID } from 'node:crypto'
+import { serializeProject } from './project-file'
 
-export interface Note { id: string; tick: number; layer: number; pitch: number; instrument: number; velocity: number }
-export interface Pattern { id: string; name: string; length: number; notes: Note[] }
+export interface Note { id: string; tick: number; layer: number; pitch: number; instrument: number; velocity: number; panning?: number; finePitch?: number }
+export interface Pattern { id: string; name: string; length: number; notes: Note[]; layerCount?: number }
 export interface Clip { id: string; patternId: string; tick: number; track: number }
 export interface Project { title: string; bpm: number; meter: string; patterns: Pattern[]; clips: Clip[] }
-export interface Snapshot { revision: number; project: Project; canUndo: boolean; canRedo: boolean }
+export interface Snapshot { revision: number; project: Project; canUndo: boolean; canRedo: boolean; document?: { path?: string; dirty: boolean; format: 'project' | 'nbs' | null }; generation?: number }
 export type Command =
   | { type: 'set-tempo'; bpm: number; meter: string }
   | { type: 'add-note'; patternId: string; tick: number; layer: number; pitch: number; instrument: number; velocity: number }
   | { type: 'paste-notes'; patternId: string; notes: Omit<Note, 'id'>[] }
   | { type: 'move-notes'; patternId: string; ids: string[]; ticks: number; pitches: number; layers: number }
   | { type: 'delete-notes'; patternId: string; ids: string[] }
-  | { type: 'set-note-properties'; patternId: string; ids: string[]; instrument?: number; velocity?: number }
+  | { type: 'set-note-properties'; patternId: string; ids: string[]; instrument?: number; velocity?: number; pitch?: number; panning?: number; finePitch?: number }
+  | { type: 'set-title'; title: string }
+  | { type: 'set-pattern-length'; patternId: string; length: number }
+  | { type: 'add-layer'; patternId: string }
+  | { type: 'delete-pattern'; patternId: string }
+  | { type: 'move-clips'; ids: string[]; ticks: number; tracks: number }
+  | { type: 'delete-clips'; ids: string[] }
+  | { type: 'paste-clips'; clips: Omit<Clip,'id'>[] }
   | { type: 'duplicate-pattern' | 'rename-pattern'; patternId: string; name?: string }
   | { type: 'create-pattern'; name: string }
   | { type: 'add-clip'; patternId: string; tick: number; track: number }
@@ -33,12 +41,12 @@ function text(value: unknown): string {
 }
 function validateNote(value: unknown): Omit<Note, 'id'> {
   const n = record(value)
-  return { tick: integer(n.tick, 0, 1_048_575), layer: integer(n.layer, 0, 7), pitch: integer(n.pitch, 21, 108), instrument: integer(n.instrument, 0, 15), velocity: integer(n.velocity, 1, 100) }
+  return { tick: integer(n.tick, 0, 1_048_575), layer: integer(n.layer, 0, 4095), pitch: integer(n.pitch, 21, 108), instrument: integer(n.instrument, 0, 255), velocity: integer(n.velocity, 0, 100), ...(n.panning === undefined ? {} : {panning:integer(n.panning,0,200)}), ...(n.finePitch === undefined ? {} : {finePitch:integer(n.finePitch,-32768,32767)}) }
 }
 export class NoteClipboard {
   private notes: Omit<Note, 'id'>[] = []
   write(value: unknown): void {
-    if (!Array.isArray(value) || value.length > 10_000) throw new Error('剪贴板内容无效')
+    if (!Array.isArray(value) || value.length > 100_000) throw new Error('剪贴板内容无效')
     this.notes = value.map(validateNote)
   }
   read(): Omit<Note, 'id'>[] { return structuredClone(this.notes) }
@@ -54,14 +62,14 @@ function assertGrid(notes: Note[]): void {
   }
 }
 function selected(pattern: Pattern, value: unknown): Note[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 10_000 || value.some(id => typeof id !== 'string')) throw new Error('请选择有效的音符')
+  if (!Array.isArray(value) || value.length === 0 || value.length > 100_000 || value.some(id => typeof id !== 'string')) throw new Error('请选择有效的音符')
   const ids = new Set(value), notes = pattern.notes.filter(n => ids.has(n.id))
   if (notes.length !== ids.size) throw new Error('音符已经改变，请重新选择')
   return notes
 }
 function extend(pattern: Pattern): void {
   const end = pattern.notes.reduce((n, note) => Math.max(n, note.tick + 1), 0)
-  pattern.length = Math.max(pattern.length, Math.ceil(end / 16) * 16)
+  pattern.length = Math.max(pattern.length, end)
 }
 
 export class ProjectSession {
@@ -69,8 +77,10 @@ export class ProjectSession {
   private revision = 0
   private past: Project[] = []
   private future: Project[] = []
+  private generation = 0
   constructor(project: Project) { this.project = structuredClone(project) }
-  snapshot(): Snapshot { return { revision: this.revision, project: structuredClone(this.project), canUndo: this.past.length > 0, canRedo: this.future.length > 0 } }
+  snapshot(): Snapshot { return { revision: this.revision, project: structuredClone(this.project), canUndo: this.past.length > 0, canRedo: this.future.length > 0, generation: this.generation } }
+  replace(project: Project): Snapshot { serializeProject(project);this.project=structuredClone(project); this.past=[]; this.future=[]; this.revision++; this.generation++; return this.snapshot() }
   dispatch(input: unknown): Snapshot {
     const cmd = record(input), type = text(cmd.type)
     if (type === 'undo' || type === 'redo') {
@@ -87,8 +97,8 @@ export class ProjectSession {
     }
     switch (type) {
       case 'set-tempo': {
-        if (typeof cmd.bpm !== 'number' || !Number.isFinite(cmd.bpm) || cmd.bpm < 30 || cmd.bpm > 300) throw new Error('BPM 必须在 30–300 之间')
-        if (!['4/4', '3/4', '6/8'].includes(String(cmd.meter))) throw new Error('拍号无效')
+        if (typeof cmd.bpm !== 'number' || !Number.isFinite(cmd.bpm) || cmd.bpm < 0.15 || cmd.bpm > 9830.25) throw new Error('BPM 必须在 0.15–9830.25 之间')
+        if (!/^([1-9]|[12][0-9]|3[0-2])\/(2|4|8|16)$/.test(String(cmd.meter))) throw new Error('拍号无效')
         draft.bpm = cmd.bpm; draft.meter = String(cmd.meter); break
       }
       case 'add-note': {
@@ -96,12 +106,12 @@ export class ProjectSession {
       }
       case 'paste-notes': {
         const p = getPattern()
-        if (!Array.isArray(cmd.notes) || !cmd.notes.length || cmd.notes.length > 10_000) throw new Error('剪贴板内容无效')
+        if (!Array.isArray(cmd.notes) || !cmd.notes.length || cmd.notes.length > 100_000) throw new Error('剪贴板内容无效')
         p.notes.push(...cmd.notes.map(n => ({ ...validateNote(n), id: randomUUID() }))); assertGrid(p.notes); extend(p); break
       }
       case 'move-notes': {
         const p = getPattern(), notes = selected(p, cmd.ids)
-        const ticks = integer(cmd.ticks, -1_048_575, 1_048_575), pitches = integer(cmd.pitches, -87, 87), layers = integer(cmd.layers, -7, 7)
+        const ticks = integer(cmd.ticks, -1_048_575, 1_048_575), pitches = integer(cmd.pitches, -87, 87), layers = integer(cmd.layers, -4095, 4095)
         for (const n of notes) { n.tick += ticks; n.pitch += pitches; n.layer += layers }
         assertGrid(p.notes); extend(p); break
       }
@@ -110,9 +120,12 @@ export class ProjectSession {
       }
       case 'set-note-properties': {
         const p = getPattern(), ns = selected(p, cmd.ids)
-        if (cmd.instrument === undefined && cmd.velocity === undefined) throw new Error('未提供需要修改的属性')
-        if (cmd.instrument !== undefined) { const ins = integer(cmd.instrument, 0, 15); ns.forEach(n => n.instrument = ins) }
-        if (cmd.velocity !== undefined) { const velocity = integer(cmd.velocity, 1, 100); ns.forEach(n => n.velocity = velocity) }
+        if (['instrument','velocity','pitch','panning','finePitch'].every(key=>cmd[key]===undefined)) throw new Error('未提供需要修改的属性')
+        if (cmd.instrument !== undefined) { const ins = integer(cmd.instrument, 0, 255); ns.forEach(n => n.instrument = ins) }
+        if (cmd.velocity !== undefined) { const velocity = integer(cmd.velocity, 0, 100); ns.forEach(n => n.velocity = velocity) }
+        if (cmd.pitch !== undefined) { const pitch = integer(cmd.pitch,21,108); ns.forEach(n=>n.pitch=pitch) }
+        if (cmd.panning !== undefined) { const pan = integer(cmd.panning,0,200); ns.forEach(n=>n.panning=pan) }
+        if (cmd.finePitch !== undefined) { const fine = integer(cmd.finePitch,-32768,32767); ns.forEach(n=>n.finePitch=fine) }
         break
       }
       case 'duplicate-pattern': {
@@ -124,7 +137,30 @@ export class ProjectSession {
         draft.patterns.push({ id: randomUUID(), name: text(cmd.name), length: 32, notes: [] }); break
       }
       case 'rename-pattern': getPattern().name = text(cmd.name); break
+      case 'add-layer': {const p=getPattern(),imported=(draft as Project & {nbs?:{layers?:unknown[]}}).nbs?.layers?.length??0;p.layerCount=integer(Math.max(p.layerCount??8,imported,...p.notes.map(n=>n.layer+1))+1,1,4096);break}
+      case 'set-title': draft.title=text(cmd.title); break
+      case 'set-pattern-length': {
+        const p=getPattern(), length=integer(cmd.length,1,1_048_576)
+        if (p.notes.some(n=>n.tick>=length)) throw new Error('不能截掉已有音符，请先移动或删除末尾音符')
+        p.length=length; break
+      }
+      case 'delete-pattern': {
+        const p=getPattern(); if(draft.patterns.length===1) throw new Error('至少保留一个 Pattern')
+        draft.patterns=draft.patterns.filter(x=>x.id!==p.id); draft.clips=draft.clips.filter(c=>c.patternId!==p.id); break
+      }
+      case 'move-clips': case 'delete-clips': {
+        if(!Array.isArray(cmd.ids)||!cmd.ids.length||cmd.ids.length>10000) throw new Error('请选择乐段')
+        const ids=new Set(cmd.ids), clips=draft.clips.filter(c=>ids.has(c.id)); if(clips.length!==ids.size) throw new Error('乐段已经改变')
+        if(type==='delete-clips') draft.clips=draft.clips.filter(c=>!ids.has(c.id))
+        else { const dt=integer(cmd.ticks,-1_048_575,1_048_575), dy=integer(cmd.tracks,-7,7); for(const c of clips){c.tick=integer(c.tick+dt,0,1_048_575);c.track=integer(c.track+dy,0,7)} }
+        break
+      }
+      case 'paste-clips': {
+        if(!Array.isArray(cmd.clips)||!cmd.clips.length||cmd.clips.length>10000||draft.clips.length+cmd.clips.length>10000) throw new Error('乐段数量超限')
+        for(const value of cmd.clips){const c=record(value), id=text(c.patternId);if(!draft.patterns.some(p=>p.id===id)) throw new Error('找不到引用的 Pattern');draft.clips.push({id:randomUUID(),patternId:id,tick:integer(c.tick,0,1_048_575),track:integer(c.track,0,7)})} break
+      }
       case 'add-clip': {
+        if(draft.clips.length>=10000) throw new Error('乐段数量超限')
         const p = getPattern(); draft.clips.push({ id: randomUUID(), patternId: p.id, tick: integer(cmd.tick, 0, 1_048_575), track: integer(cmd.track, 0, 7) }); break
       }
       case 'move-clip': {
@@ -137,6 +173,7 @@ export class ProjectSession {
       }
       default: throw new Error('不支持这个编辑命令')
     }
+    serializeProject(draft)
     this.past.push(this.project); if (this.past.length > 60) this.past.shift()
     this.future = []; this.project = draft; this.revision++
     return this.snapshot()

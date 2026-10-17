@@ -1,4 +1,6 @@
-# 2026-10-17 桌面工程配置记录
+# 2026-10-17 桌面工程配置记录（0.1.0 历史）
+
+后续 0.2.0 已实现文件读写并修正交互，当前能力见 README 和 `0.2.0-validation.md`。
 
 依据父目录 `docs/superpowers/specs/2026-10-17-desktop-foundation-design.md` 与同日期计划实施。
 

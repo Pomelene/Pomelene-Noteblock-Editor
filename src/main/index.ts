@@ -1,8 +1,10 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, dialog } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createDemoProject, NoteClipboard, ProjectSession } from '../shared/project'
+import { ProjectFiles } from './files'
+import { decodeNbs, encodeNbs, getNbsExportWarnings } from '../shared/nbs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const renderer = join(here, '../renderer/index.html')
@@ -11,6 +13,14 @@ const clipboard = new NoteClipboard()
 const windows = new Set<BrowserWindow>()
 const editors = new Map<string, BrowserWindow>()
 let mainWindow: BrowserWindow
+let quitting=false, closing=false
+const files=new ProjectFiles({getSnapshot:()=>session.snapshot(),getWindow:()=>mainWindow,codec:{decodeNbs,encodeNbs},replaceProject:project=>{
+  for(const win of editors.values())win.destroy()
+  editors.clear();clipboard.write([]);session.replace(project)
+  for(const win of windows)win.webContents.send('audio:stop')
+}})
+function snapshot(){return {...session.snapshot(),document:files.document}}
+function broadcast(){const state=snapshot();for(const win of windows)if(!win.isDestroyed())win.webContents.send('project:snapshot',state);return state}
 const devURL = process.env.ELECTRON_RENDERER_URL
 function authorized(event: IpcMainInvokeEvent): void {
   const owner = BrowserWindow.fromWebContents(event.sender)
@@ -39,15 +49,30 @@ function createWindow(patternId?: string): BrowserWindow {
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null)
   mainWindow = createWindow()
+  mainWindow.on('close',event=>{
+    if(quitting||!files.document.dirty)return
+    event.preventDefault();if(closing)return;closing=true
+    void files.confirmClose().then(ok=>{broadcast();if(ok){quitting=true;app.quit()}}).catch(e=>dialog.showErrorBox('无法关闭工程',String(e.message))).finally(()=>closing=false)
+  })
   mainWindow.on('closed', () => app.quit())
-  ipcMain.handle('project:get', event => { authorized(event); return session.snapshot() })
+  ipcMain.handle('project:get', event => { authorized(event); return snapshot() })
+  ipcMain.handle('audio:begin',event=>{authorized(event);for(const win of windows)if(win.webContents!==event.sender)win.webContents.send('audio:stop')})
+  ipcMain.handle('audio:stop',event=>{authorized(event);for(const win of windows)win.webContents.send('audio:stop')})
+  ipcMain.handle('file:action',async(event,action:unknown)=>{
+    authorized(event)
+    const methods={new:()=>files.newProject(),open:()=>files.open(),save:()=>files.save(),saveAs:()=>files.saveAs(),exportNbs:()=>files.exportNbs()}
+    if(typeof action!=='string'||!Object.hasOwn(methods,action))throw new Error('不支持的文件操作')
+    const ok=await methods[action as keyof typeof methods]();return {ok,snapshot:broadcast(),warnings:ok&&action==='exportNbs'?getNbsExportWarnings(session.snapshot().project):[]}
+  })
   ipcMain.handle('notes:clipboard:read', event => { authorized(event); return clipboard.read() })
   ipcMain.handle('notes:clipboard:write', (event, notes: unknown) => { authorized(event); clipboard.write(notes) })
-  ipcMain.handle('project:dispatch', (event, command: unknown) => {
+  ipcMain.handle('project:dispatch', (event, command: unknown, generation:unknown) => {
     authorized(event)
-    const snapshot = session.dispatch(command)
-    for (const win of windows) if (!win.isDestroyed()) win.webContents.send('project:snapshot', snapshot)
-    return snapshot
+    if(generation!==session.snapshot().generation)throw new Error('工程已切换，请重新执行编辑')
+    session.dispatch(command)
+    const patternIds=new Set(session.snapshot().project.patterns.map(p=>p.id))
+    for(const [id,win] of editors)if(!patternIds.has(id))win.destroy()
+    return broadcast()
   })
   ipcMain.handle('pattern:open', (event, id: unknown) => {
     authorized(event)

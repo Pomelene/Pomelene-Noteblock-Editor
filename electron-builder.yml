@@ -1,12 +1,16 @@
 appId: studio.noteblock.editor
 productName: NoteBlock Editor
 directories:
-  output: release
+  output: ../deliverables/NoteBlockEditor-0.2.0
+artifactName: NoteBlockEditor-${version}-windows-${arch}.${ext}
 files:
   - out/**/*
   - package.json
 asar: true
 electronDist: node_modules/electron/dist
+extraFiles:
+  - from: resources/使用说明.txt
+    to: 使用说明.txt
 win:
-  target: dir
+  target: zip
   executableName: NoteBlock Editor
