@@ -1,13 +1,13 @@
-# NoteBlock Editor 0.2.0
+# NoteBlock Editor 0.2.1
 
 Windows 优先的 Electron + React + TypeScript 音符盒音乐编辑器。当前版本包含 Pattern 编排、音符编辑、工程保存和 NBS 读写。
 
 ## 运行包与源码包
 
-发行文件位于工作区 `deliverables/NoteBlockEditor-0.2.0/`：
+发行文件位于工作区 `deliverables/NoteBlockEditor-0.2.1/`：
 
-- `NoteBlockEditor-0.2.0-windows-x64.zip`：完整解压后运行 `NoteBlock Editor.exe`。运行包包含应用及 Electron 运行时，不含 src、测试、Git 和开发依赖。
-- `NoteBlockEditor-0.2.0-source.zip`：源码、配置、锁文件、测试和采样资源；不含 node_modules、可执行文件或构建输出。
+- `NoteBlockEditor-0.2.1-windows-x64.zip`：完整解压后运行 `NoteBlock Editor.exe`。运行包包含应用及 Electron 运行时，不含 src、测试、Git 和开发依赖。
+- `NoteBlockEditor-0.2.1-source.zip`：源码、配置、锁文件、测试和采样资源；不含 node_modules、可执行文件或构建输出。
 - `win-unpacked/`：本机直接试用目录，与 Windows ZIP 内容对应。保留 EXE 同目录的 DLL、resources、locales 等文件。
 
 源码工作目录为 `desktop/`，发行输出放在工作目录外。旧版 `desktop/release/` 是 0.1.0 的历史输出，不是本次交付。
@@ -65,7 +65,7 @@ pnpm pack:win
 pnpm smoke:packaged
 ```
 
-构建、打包、验收按顺序运行，打包读取 out 时不要重建 out。源代码包可通过 `git archive` 从版本提交生成，版本说明见 `docs/0.2.0-validation.md`。
+构建、打包、验收按顺序运行，打包读取 out 时不要重建 out。源代码包可通过 `git archive` 从版本提交生成，版本说明见 `docs/0.2.1-validation.md`。
 
 桌面验收优先使用本机参考曲目；该文件不存在时会自动生成 35,361 音符的 NBS 压力样本。也可以通过 `NBE_NBS_FIXTURE` 指定自己的测试 NBS，源码包不依赖原机器的用户歌曲。
 

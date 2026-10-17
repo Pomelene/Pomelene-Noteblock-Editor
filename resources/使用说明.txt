@@ -1,4 +1,4 @@
-NoteBlock Editor 0.2.0 · Windows x64
+NoteBlock Editor 0.2.1 · Windows x64
 
 请完整解压运行包，再打开 NoteBlock Editor.exe。保留同目录的 DLL、resources 和 locales 等文件。
 
@@ -15,4 +15,4 @@ SONG 播放编排，PAT 播放所选 Pattern；空格播放 / 停止。
 外部自定义采样/资源包加载、MIDI 导入与自动编曲尚未接入。
 旧 NBS 的自定义音色定义会保留；缺少其采样时会明确提示。
 
-源代码另行提供于 NoteBlockEditor-0.2.0-source.zip。
+源代码另行提供于 NoteBlockEditor-0.2.1-source.zip。
