@@ -339,6 +339,8 @@ export class ProjectFiles {
           warnings: string[] = [];
         let project = decodeProject(bytes, path);
         const isProject = /^\s*\{/.test(new TextDecoder().decode(bytes));
+        if (!isProject && !this.options.chooseImport)
+          warnings.push(...(project.nbs?.warnings ?? []));
         if (!isProject && this.options.chooseImport) {
           const organized = organizeImportedProject(project);
           organized.summary.fileName = basename(path);
@@ -439,6 +441,7 @@ export class ProjectFiles {
     if (isAudioPath(path))
       throw new Error("音频资源不能导入为 NBS 音符片段采样");
     const imported = fromNbs(bytes);
+    warnings.push(...(imported.nbs?.warnings ?? []));
     await this.resolveSamples(imported, dirname(path), warnings, false);
     const capture = new Session(imported).dispatch({
       type: "phrase:fromClips",

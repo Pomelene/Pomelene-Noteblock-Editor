@@ -377,6 +377,7 @@ export function Playlist({
       setIds(result.project.clips.slice(-clipboard.length).map((c) => c.id));
   }
   function clipMenu(c: Clip, x: number, y: number) {
+    chooseSource?.({ kind: c.kind, id: c.sourceId });
     setIds((old) => (old.includes(c.id) ? old : [c.id]));
     const chosen = ids.includes(c.id) ? ids : [c.id];
     menu(x, y, [
@@ -951,6 +952,8 @@ export function Playlist({
               e.preventDefault();
               const c = hit(x, y),
                 at = atTick(p.tick, e.altKey);
+              if (c && e.button === 0 && tool !== "delete")
+                chooseSource?.({ kind: c.kind, id: c.sourceId });
               setCursor(at);
               const start = (
                 move: (v: PointerEvent) => void,

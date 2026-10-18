@@ -93,8 +93,8 @@ export function ImportSummary({ summary }: { summary: NbsImportSummary }) {
         </section>
       )}
       <p className="import-preservation">
-        只调整 Pattern
-        分组与编排引用；不量化、不移动或删除音符，保留力度、声像、微调和采样尾音。
+        智能整理只调整 Pattern
+        分组与编排引用；不量化、不移动或删除音符，保留导入后的力度、声像、微调和采样尾音。文件兼容处理以本预览的提示为准。
       </p>
       <p className="import-algorithm">
         整理算法 <code>{summary.algorithmVersion}</code>

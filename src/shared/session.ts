@@ -332,8 +332,8 @@ export function validateProject(value: unknown): Project {
       if (l.sourceIndex !== undefined) num(l.sourceIndex, 0, 4095, true);
     }
     const noteIds = new Set<string | number>();
-    for (const rawNote of arr(pattern.notes, 100_000)) {
-      if (++notes > 200_000) fail("工程音符总数超出限制");
+    for (const rawNote of arr(pattern.notes, 500_000)) {
+      if (++notes > 1_000_000) fail("工程音符总数超出限制（1,000,000）");
       const n = obj(rawNote);
       unique(n.id, noteIds);
       num(n.tick, 0, MAX_TICK);
@@ -389,7 +389,7 @@ export function validateProject(value: unknown): Project {
     fail("循环结束必须晚于开始");
   if (p.nbs !== undefined) {
     const n = obj(p.nbs);
-    num(n.version, 0, 5, true);
+    num(n.version, 0, 6, true);
     arr(n.customInstruments, 255);
     arr(n.layers, 4096);
   }
@@ -522,7 +522,8 @@ export class Session {
       };
       const noteSelection = (id: string, ids: string[]) => {
         const pat = pattern(id);
-        const chosen = pat.notes.filter((n) => ids.includes(n.id));
+        const requested = new Set(ids);
+        const chosen = pat.notes.filter((n) => requested.has(n.id));
         if (chosen.some((n) => pat.layers[n.layer].locked)) fail("图层已锁定");
         return { pat, chosen };
       };
@@ -579,16 +580,15 @@ export class Session {
                 n.tick < clip.offset + clip.length &&
                 n.tick < source.length,
             );
-            if (copy.notes.length + notes.length > 100_000)
+            if (copy.notes.length + notes.length > 500_000)
               fail("选区音符数量超出限制");
-            copy.notes.push(
-              ...notes.map((n) => ({
+            for (const n of notes)
+              copy.notes.push({
                 ...n,
                 id: uid(),
                 tick: clip.tick - start + n.tick - clip.offset,
                 layer: firstLayer + n.layer,
-              })),
-            );
+              });
           }
           (p.phrases ??= []).push(copy);
           break;
@@ -702,7 +702,8 @@ export class Session {
         }
         case "notes:remove": {
           const { pat } = noteSelection(command.patternId, command.ids);
-          pat.notes = pat.notes.filter((n) => !command.ids.includes(n.id));
+          const removing = new Set(command.ids);
+          pat.notes = pat.notes.filter((n) => !removing.has(n.id));
           break;
         }
         case "layer:add": {

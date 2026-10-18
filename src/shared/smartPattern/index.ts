@@ -87,7 +87,7 @@ export function organizeImportedProject(
     original,
     proposed: { ...original, reusedClips: 0 },
     groups: [],
-    warnings: [],
+    warnings: [...(input.nbs?.warnings ?? [])],
   };
   const fallback = (warning: string) => {
     summary.applicable = false;

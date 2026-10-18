@@ -1,6 +1,6 @@
 {
   "name": "note-block-editor",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Pattern-based desktop editor for Note Block Songs",
   "private": true,
   "type": "module",
@@ -17,7 +17,9 @@
     "analyze:nbs": "node scripts/analyze-nbs.cjs",
     "smoke:smart": "node scripts/smart-import-smoke.cjs",
     "smoke:phrases": "node scripts/phrase-interaction-smoke.cjs",
-    "smoke:workspace": "node scripts/workspace-shortcuts-smoke.cjs"
+    "smoke:workspace": "node scripts/workspace-shortcuts-smoke.cjs",
+    "smoke:playback-target": "node scripts/playback-target-smoke.cjs",
+    "test:nbs-corpus": "node scripts/nbs-compatibility.cjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

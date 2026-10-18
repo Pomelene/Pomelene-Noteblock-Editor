@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Pencil,
   Paintbrush,
@@ -125,7 +125,12 @@ export function PatternEditor({
   useEffect(() => {
     cancelGesture.current?.();
   }, [project]);
-  const selected = pattern.notes.filter((n) => ids.includes(n.id)),
+  const selectedIds = useMemo(() => new Set(ids), [ids]);
+  const noteIds = useMemo(
+    () => new Set(pattern.notes.map((n) => n.id)),
+    [pattern.notes],
+  );
+  const selected = pattern.notes.filter((n) => selectedIds.has(n.id)),
     first = selected[0],
     ins = project.instruments.find((i) => i.id === instrument),
     sample = project.samples.find((s) => s.id === ins?.sampleId);
@@ -144,7 +149,7 @@ export function PatternEditor({
     }
   }, [mode, pattern.id]);
   useEffect(() => {
-    setIds((old) => old.filter((id) => pattern.notes.some((n) => n.id === id)));
+    setIds((old) => old.filter((id) => noteIds.has(id)));
   }, [pattern.notes]);
   useEffect(() => {
     const check = () =>
@@ -242,12 +247,14 @@ export function PatternEditor({
       ctx.stroke();
       ctx.setLineDash([]);
     }
+    const ghostNotes = new Map(ghost.map((n) => [n.id, n]));
+    const erasedIds = new Set(erased);
     for (const original of [
       ...pattern.notes,
-      ...ghost.filter((g) => !pattern.notes.some((n) => n.id === g.id)),
+      ...ghost.filter((g) => !noteIds.has(g.id)),
     ]) {
-      if (erased.includes(original.id)) continue;
-      const note = ghost.find((n) => n.id === original.id) ?? original,
+      if (erasedIds.has(original.id)) continue;
+      const note = ghostNotes.get(original.id) ?? original,
         row = mode === "piano" ? 108 - note.pitch : note.layer,
         x = L + note.tick * zoom - view.x + 1,
         y = H + row * rh - view.y + 2,
@@ -259,7 +266,7 @@ export function PatternEditor({
         color =
           project.samples.find((s) => s.id === instrumentDef?.sampleId)
             ?.color ?? pattern.color,
-        active = ids.includes(note.id),
+        active = selectedIds.has(note.id),
         locked = pattern.layers[note.layer]?.locked,
         muted = pattern.layers[note.layer]?.muted;
       ctx.globalAlpha = noteOpacity(
@@ -364,8 +371,14 @@ export function PatternEditor({
   async function copy(cut = false) {
     try {
       if (!selected.length) return;
-      const start = Math.min(...selected.map((n) => n.tick)),
-        base = Math.min(...selected.map((n) => n.layer));
+      const start = selected.reduce(
+          (bound, n) => Math.min(bound, n.tick),
+          Infinity,
+        ),
+        base = selected.reduce(
+          (bound, n) => Math.min(bound, n.layer),
+          Infinity,
+        );
       await window.studio.writeClipboard(
         selected.map(({ id, ...n }) => ({
           ...n,
@@ -462,7 +475,9 @@ export function PatternEditor({
         label: "反选",
         action: () =>
           setIds(
-            pattern.notes.filter((n) => !ids.includes(n.id)).map((n) => n.id),
+            pattern.notes
+              .filter((n) => !selectedIds.has(n.id))
+              .map((n) => n.id),
           ),
       },
       { separator: true, label: "" },
@@ -526,8 +541,14 @@ export function PatternEditor({
   }
   function duplicate() {
     if (!selected.length) return;
-    const from = Math.min(...selected.map((n) => n.tick)),
-      end = Math.max(...selected.map((n) => n.tick + unit));
+    const from = selected.reduce(
+        (bound, n) => Math.min(bound, n.tick),
+        Infinity,
+      ),
+      end = selected.reduce(
+        (bound, n) => Math.max(bound, n.tick + unit),
+        -Infinity,
+      );
     void run({
       type: "notes:add",
       patternId: pattern.id,
@@ -550,7 +571,7 @@ export function PatternEditor({
     (n) =>
       n.tick * zoom >= view.x - unit * zoom &&
       n.tick * zoom < view.x + view.w - L &&
-      (ids.length ? ids.includes(n.id) : n.layer === layer),
+      (ids.length ? selectedIds.has(n.id) : n.layer === layer),
   );
   return (
     <div
@@ -598,7 +619,9 @@ export function PatternEditor({
             break;
           case "selection:invert":
             setIds(
-              pattern.notes.filter((n) => !ids.includes(n.id)).map((n) => n.id),
+              pattern.notes
+                .filter((n) => !selectedIds.has(n.id))
+                .map((n) => n.id),
             );
             break;
           case "edit:copy":
@@ -674,8 +697,14 @@ export function PatternEditor({
             break;
           case "zoom:selection": {
             if (selected.length) {
-              const from = Math.min(...selected.map((n) => n.tick));
-              const to = Math.max(...selected.map((n) => n.tick + unit));
+              const from = selected.reduce(
+                (bound, n) => Math.min(bound, n.tick),
+                Infinity,
+              );
+              const to = selected.reduce(
+                (bound, n) => Math.max(bound, n.tick + unit),
+                -Infinity,
+              );
               const nextZoom = Math.max(
                 4,
                 Math.min(64, (view.w - L - 24) / (to - from)),
@@ -1227,7 +1256,7 @@ export function PatternEditor({
                 if (e.ctrlKey || tool === "select") {
                   if (note && e.ctrlKey) {
                     setIds(
-                      ids.includes(note.id)
+                      selectedIds.has(note.id)
                         ? ids.filter((id) => id !== note.id)
                         : [...ids, note.id],
                     );
@@ -1364,15 +1393,19 @@ export function PatternEditor({
                   return;
                 }
                 if (pattern.layers[note.layer]?.locked) return;
-                const next = ids.includes(note.id) ? ids : [note.id];
+                const next = selectedIds.has(note.id) ? ids : [note.id];
                 setIds(next);
+                const nextIds = new Set(next);
                 const originals = pattern.notes.filter((n) =>
-                    next.includes(n.id),
+                    nextIds.has(n.id),
                   ),
                   copyDrag = e.shiftKey;
                 const delta = (event: PointerEvent) => ({
                   ticks: Math.max(
-                    -Math.min(...originals.map((n) => n.tick)),
+                    -originals.reduce(
+                      (bound, n) => Math.min(bound, n.tick),
+                      Infinity,
+                    ),
                     snapDelta(
                       (event.clientX - e.clientX) / zoom,
                       snap,
@@ -1384,9 +1417,17 @@ export function PatternEditor({
                   pitches:
                     mode === "piano"
                       ? Math.max(
-                          21 - Math.min(...originals.map((n) => n.pitch)),
+                          21 -
+                            originals.reduce(
+                              (bound, n) => Math.min(bound, n.pitch),
+                              Infinity,
+                            ),
                           Math.min(
-                            108 - Math.max(...originals.map((n) => n.pitch)),
+                            108 -
+                              originals.reduce(
+                                (bound, n) => Math.max(bound, n.pitch),
+                                -Infinity,
+                              ),
                             -Math.round((event.clientY - e.clientY) / rh),
                           ),
                         )
@@ -1394,7 +1435,10 @@ export function PatternEditor({
                   layers:
                     mode === "layers"
                       ? Math.max(
-                          -Math.min(...originals.map((n) => n.layer)),
+                          -originals.reduce(
+                            (bound, n) => Math.min(bound, n.layer),
+                            Infinity,
+                          ),
                           Math.round((event.clientY - e.clientY) / rh),
                         )
                       : 0,
@@ -1541,7 +1585,7 @@ export function PatternEditor({
             <button
               key={n.id}
               className={
-                ids.includes(n.id) ? "velocity-bar chosen" : "velocity-bar"
+                selectedIds.has(n.id) ? "velocity-bar chosen" : "velocity-bar"
               }
               aria-label={`力度 Tick ${n.tick} 图层 ${n.layer + 1}`}
               title={`${n.velocity}%`}
@@ -1550,7 +1594,7 @@ export function PatternEditor({
                   n.instrument,
                   instrument,
                   showAllInstruments,
-                  ids.includes(n.id),
+                  selectedIds.has(n.id),
                   !!(
                     pattern.layers[n.layer]?.locked ||
                     pattern.layers[n.layer]?.muted
@@ -1569,7 +1613,7 @@ export function PatternEditor({
               onPointerDown={(e) => {
                 const el = e.currentTarget,
                   rect = el.parentElement!.getBoundingClientRect(),
-                  affected = ids.includes(n.id) ? ids : [n.id];
+                  affected = selectedIds.has(n.id) ? ids : [n.id];
                 el.setPointerCapture(e.pointerId);
                 const value = (y: number) =>
                   Math.max(

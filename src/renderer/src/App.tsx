@@ -30,10 +30,10 @@ import { PhrasePreview } from "./PhrasePreview";
 import { ImportDialog, ImportSummary } from "./ImportDialog";
 import { resolveShortcut } from "./shortcuts";
 import { ShortcutHelp } from "./ShortcutHelp";
+import { TransportPosition } from "./TransportPosition";
 import { layoutWindows } from "./windowGeometry";
 import type { FrameView } from "./WindowFrame";
 import {
-  ticksPerBar,
   type FileAction,
   type Command,
   type ImportPrompt,
@@ -123,23 +123,6 @@ export function App() {
           s.status === "paused"
         ) {
           setMode(s.scope === "song" ? "song" : "source");
-          if (s.scope !== "song") {
-            const kind = projectRef.current?.patterns.some(
-              (p) => p.id === s.scope,
-            )
-              ? "pattern"
-              : projectRef.current?.phrases?.some((p) => p.id === s.scope)
-                ? "phrase"
-                : projectRef.current?.samples.some((p) => p.id === s.scope)
-                  ? "sample"
-                  : undefined;
-            if (kind)
-              setSource((old) =>
-                old.id === s.scope && old.kind === kind
-                  ? old
-                  : { kind, id: s.scope },
-              );
-          }
         }
         if (s.error) setError(s.error);
         if (s.status === "stopped" && s.tick === 0) setStops((v) => v + 1);
@@ -276,7 +259,7 @@ export function App() {
         .catch((e) => setError(cleanError(e)));
       return;
     }
-    setSource(s);
+    selectSource(s);
     const rect = workspace.current?.getBoundingClientRect(),
       count = views.filter((v) => v.state === "normal").length,
       id = crypto.randomUUID();
@@ -411,13 +394,28 @@ export function App() {
         .play(project, mode === "song" ? "song" : source.id)
         .catch((e) => setError(cleanError(e)));
   }
+  function selectSource(next: Source) {
+    const currentProject = projectRef.current;
+    if (!currentProject || !getSource(currentProject, next)) return;
+    setSource(next);
+    const playing = audio.getState();
+    if (
+      mode === "source" &&
+      playing.scope !== "song" &&
+      playing.scope !== next.id &&
+      (playing.status === "playing" || playing.status === "loading")
+    )
+      void audio
+        .play(currentProject, next.id)
+        .catch((e) => setError(cleanError(e)));
+  }
   function stop() {
     audio.stop();
     setStops((v) => v + 1);
   }
   function sourceMenu(s: Source, x: number, y: number) {
     if (!project) return;
-    setSource(s);
+    selectSource(s);
     const obj = getSource(project, s);
     if (!obj) return;
     showMenu(x, y, [
@@ -643,7 +641,7 @@ export function App() {
           else {
             setActive(next);
             const v = views.find((v) => v.id === next)!;
-            setSource({ kind: v.kind, id: v.sourceId });
+            selectSource({ kind: v.kind, id: v.sourceId });
             setViews((vs) =>
               vs.map((v) => (v.id === next ? { ...v, z: ++z.current } : v)),
             );
@@ -675,9 +673,6 @@ export function App() {
       </div>
     );
   const selectedObj = getSource(project, source);
-  const currentBar = ticksPerBar(project.meter),
-    beat = 16 / +project.meter.split("/")[1],
-    position = transport.tick;
   const fileItems: MenuItem[] = [
     { label: "新建工程", shortcut: "Ctrl+N", action: () => void file("new") },
     {
@@ -716,7 +711,7 @@ export function App() {
           tick={transport.scope === s.id ? transport.tick : undefined}
           playing={transport.scope === s.id && transport.status === "playing"}
           toggle={() => {
-            setSource(s);
+            selectSource(s);
             setMode("source");
             if (
               transport.scope === s.id &&
@@ -749,7 +744,7 @@ export function App() {
           playTick={transport.scope === p.id ? transport.tick : undefined}
           stopped={stops}
           seek={(at) => {
-            setSource(s);
+            selectSource(s);
             setMode("source");
             audio.seek(at, s.id);
           }}
@@ -784,14 +779,14 @@ export function App() {
       className={`source-row ${source.id === s.id && source.kind === s.kind ? "active" : ""}`}
       draggable
       onDragStart={(e) => {
-        setSource(s);
+        selectSource(s);
         e.dataTransfer.setData(
           "application/noteblock-source",
           JSON.stringify(s),
         );
         e.dataTransfer.effectAllowed = "copy";
       }}
-      onClick={() => setSource(s)}
+      onClick={() => selectSource(s)}
       onDoubleClick={() => openView(s)}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -818,7 +813,7 @@ export function App() {
     <Playlist
       project={project}
       source={source}
-      chooseSource={setSource}
+      chooseSource={selectSource}
       run={run}
       open={openView}
       menu={showMenu}
@@ -1006,7 +1001,7 @@ export function App() {
                     label: "关于 NoteBlock Editor",
                     action: () =>
                       setInfo({
-                        title: "NoteBlock Editor 0.6.0",
+                        title: "NoteBlock Editor 0.6.1",
                         body: (
                           <p>
                             Windows 桌面编辑器 · 新工作区
@@ -1079,6 +1074,8 @@ export function App() {
               </button>
               <button
                 className={mode === "source" ? "on" : ""}
+                title={`当前播放目标：${selectedObj?.name ?? "未选择来源"}`}
+                data-playback-source={source.id}
                 disabled={!selectedObj}
                 onClick={() => {
                   audio.stop();
@@ -1175,20 +1172,7 @@ export function App() {
                 ))}
               </select>
             </div>
-            <div className="time-counter" aria-label="播放位置">
-              <span>
-                {String(Math.floor(position / currentBar) + 1).padStart(3, "0")}
-                <i>:</i>
-                {String(
-                  Math.floor((position % currentBar) / beat) + 1,
-                ).padStart(2, "0")}
-                <i>:</i>
-                {String(Math.floor((position % beat) * 100)).padStart(2, "0")}
-              </span>
-              <small>
-                BAR <b>·</b> BEAT <b>·</b> TICK
-              </small>
-            </div>
+            <TransportPosition tick={transport.tick} meter={project.meter} />
             <span className="spacer" />
             <div className="file-shortcuts">
               <button
@@ -1578,7 +1562,7 @@ export function App() {
                     }
                     onFocus={() => {
                       setActive(view.id);
-                      setSource({ kind: view.kind, id: view.sourceId });
+                      selectSource({ kind: view.kind, id: view.sourceId });
                       setViews((v) =>
                         v.map((w) =>
                           w.id === view.id ? { ...w, z: ++z.current } : w,
@@ -1619,6 +1603,7 @@ export function App() {
                   }
                   onClick={() => {
                     setActive(view.id);
+                    selectSource({ kind: view.kind, id: view.sourceId });
                     setViews((v) =>
                       v.map((w) =>
                         w.id === view.id

@@ -39,7 +39,7 @@ export interface NbsMetadata {
 export type NbsProject = Project & { nbs?: NbsMetadata };
 const MAX_BYTES = 32 * 1024 * 1024,
   MAX_STRING = 1024 * 1024,
-  MAX_NOTES = 100_000;
+  MAX_NOTES = 500_000;
 function integer(n: number, min: number, max: number, label: string): number {
   if (!Number.isInteger(n) || n < min || n > max)
     throw new Error(`NBS ${label} out of range (${min}–${max})`);
@@ -94,6 +94,8 @@ export function decodeNbs(data: Uint8Array): NbsProject {
   if (!(data instanceof Uint8Array) || data.byteLength > MAX_BYTES)
     throw new Error("NBS file exceeds 32 MiB limit");
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const warnings: string[] = [];
+  const repairedVelocities = new Map<number, number>();
   let pos = 0;
   const need = (n: number) => {
     if (pos + n > data.length) throw new Error(`Truncated NBS at byte ${pos}`);
@@ -137,10 +139,15 @@ export function decodeNbs(data: Uint8Array): NbsProject {
   };
   const first = short(),
     version = first === 0 ? byte() : 0;
-  if (first === 0 && (version < 1 || version > 5))
+  if (first === 0 && (version < 1 || version > 6))
     throw new Error(`Unsupported NBS version ${version}`);
   const vanillaInstrumentCount = version
-    ? integer(byte(), 1, VANILLA_INSTRUMENTS, "vanilla instrument count")
+    ? integer(
+        byte(),
+        1,
+        version >= 6 ? 20 : VANILLA_INSTRUMENTS,
+        "vanilla instrument count",
+      )
     : 10;
   const length = version === 0 ? first : version >= 3 ? short() : 0;
   const height = integer(short(), 0, 4096, "layer count");
@@ -162,6 +169,7 @@ export function decodeNbs(data: Uint8Array): NbsProject {
   const maxLoopCount = version >= 4 ? byte() : 0,
     loopStartTick = version >= 4 ? short() : 0;
   const notes: Note[] = [];
+  let inferredHeight = height;
   let tick = -1;
   for (;;) {
     const jump = short();
@@ -171,15 +179,22 @@ export function decodeNbs(data: Uint8Array): NbsProject {
     for (;;) {
       const delta = short();
       if (!delta) break;
-      layer = integer(layer + delta, 0, height - 1, "note layer");
+      layer = integer(layer + delta, 0, 4095, "note layer");
+      inferredHeight = Math.max(inferredHeight, layer + 1);
       const instrument = byte(),
         pitch = integer(byte(), 0, 87, "key") + 21;
-      const velocity = version >= 4 ? integer(byte(), 0, 100, "velocity") : 100;
+      const rawVelocity = version >= 4 ? byte() : 100;
+      const velocity = Math.min(100, rawVelocity);
+      if (rawVelocity > 100)
+        repairedVelocities.set(
+          rawVelocity,
+          (repairedVelocities.get(rawVelocity) ?? 0) + 1,
+        );
       const panning =
         version >= 4 ? integer(byte(), 0, 200, "note panning") : 100;
       const finePitch = version >= 4 ? signed() : 0;
       if (notes.length >= MAX_NOTES)
-        throw new Error("NBS exceeds 100,000 notes");
+        throw new Error("NBS exceeds 500,000 notes");
       notes.push({
         id: `nbs-note-${notes.length}`,
         tick,
@@ -214,34 +229,84 @@ export function decodeNbs(data: Uint8Array): NbsProject {
       key: byte(),
       pressKey: integer(byte(), 0, 1, "custom press key"),
     });
-  if (pos !== data.length)
-    throw new Error(
-      `Unsupported trailing NBS data (${data.length - pos} bytes)`,
+  if (pos !== data.length) {
+    if (version === 0 && data.subarray(pos).every((value) => value === 0))
+      warnings.push(
+        `已识别旧 NBS 文件末尾 ${data.length - pos} 字节零填充（padding），所有音符均已保留。`,
+      );
+    else
+      throw new Error(
+        `Unsupported trailing NBS data (${data.length - pos} bytes)`,
+      );
+  }
+  if (inferredHeight > height) {
+    warnings.push(
+      `文件头声明 ${height} 个图层，实际音符使用 ${inferredHeight} 个；已补全缺少的图层设置，音符位置保留。`,
     );
+    while (layers.length < inferredHeight) layers.push(defaultLayer());
+  }
+  for (const [value, count] of repairedVelocities)
+    warnings.push(
+      `${count} 个音符的力度 ${value} 超出 NBS 0–100 范围，已规范为 100；音符未删除。`,
+    );
+  const classicExtended =
+    version === 0 &&
+    customCount === 0 &&
+    notes.some((n) => n.instrument >= 10 && n.instrument < 16);
+  if (classicExtended)
+    warnings.push(
+      "旧格式使用了未声明的扩展原版音色，按原版乐器 10–15 读取；没有替换为自定义乐器。",
+    );
+  const effectiveVanilla = classicExtended ? 16 : vanillaInstrumentCount;
+  const copper = new Map<number, number>();
   for (const n of notes) {
-    if (n.instrument >= vanillaInstrumentCount + customCount)
+    if (n.instrument >= effectiveVanilla + customCount)
       throw new Error(`NBS instrument ${n.instrument} has no definition`);
-    if (n.instrument >= vanillaInstrumentCount)
+    if (version >= 6 && n.instrument >= 16 && n.instrument < effectiveVanilla) {
+      let mapped = copper.get(n.instrument);
+      if (mapped === undefined) {
+        mapped = 16 + customInstruments.length;
+        integer(mapped, 16, 255, "converted copper instrument");
+        const names = [
+          "Trumpet",
+          "Exposed Trumpet",
+          "Weathered Trumpet",
+          "Oxidized Trumpet",
+        ];
+        const files = [
+          "trumpet",
+          "trumpet_exposed",
+          "trumpet_weathered",
+          "trumpet_oxidized",
+        ];
+        customInstruments.push({
+          name: names[n.instrument - 16],
+          file: `minecraft/${files[n.instrument - 16]}.ogg`,
+          key: 45,
+          pressKey: 0,
+        });
+        copper.set(n.instrument, mapped);
+      }
+      n.instrument = mapped;
+    } else if (n.instrument >= effectiveVanilla)
       n.instrument = integer(
-        n.instrument + VANILLA_INSTRUMENTS - vanillaInstrumentCount,
+        n.instrument + VANILLA_INSTRUMENTS - effectiveVanilla,
         0,
         255,
         "remapped instrument",
       );
   }
-  const warnings: string[] = [];
+  if (copper.size)
+    warnings.push(
+      "NBS v6 铜号（Trumpet）已保留为具名自定义乐器，导出 v5 时需附带对应音频采样；未用其他音色替代。",
+    );
   if (customCount)
     warnings.push(
-      "自定义音色定义已保留；外部采样加载尚未接入，缺少采样的音色无法预听。",
+      "自定义音色定义已保留；外部采样按引用查找，缺失时会另行提示，不会用其他音色冒充。",
     );
-  if (loop)
-    warnings.push(
-      "NBS 循环设置已保留用于导出；当前编排播放不自动执行 NBS 循环。",
-    );
+  if (loop) warnings.push("NBS 循环设置已保留，用于整曲播放与导出。");
   if (layers.some((l) => l.volume !== 100 || l.panning !== 100 || l.locked))
-    warnings.push(
-      "图层附加设置已保留；音量和声像参与预听，图层锁定目前不限制编辑。",
-    );
+    warnings.push("图层音量、声像与锁定设置已保留。");
   const patternLength = notes.reduce(
     (end, n) => Math.max(end, n.tick + 1),
     Math.max(1, length),
@@ -348,7 +413,7 @@ export function encodeNbs(project: Project): Uint8Array {
       used.add(layer);
       notes.push({ ...n, tick, layer });
       if (notes.length > MAX_NOTES)
-        throw new Error("NBS export exceeds 100,000 notes");
+        throw new Error("NBS export exceeds 500,000 notes");
     }
   }
   notes.sort((a, b) => a.tick - b.tick || a.layer - b.layer);

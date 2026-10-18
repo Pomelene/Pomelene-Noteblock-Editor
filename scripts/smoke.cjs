@@ -284,14 +284,23 @@ async function drag(locator, from, to) {
           page.getByRole("button", { name: "PAT", exact: true }),
         ).toHaveClass("on");
         await expect
-          .poll(async () => await page.getByLabel("播放位置").innerText())
-          .not.toContain("001:01:00");
+          .poll(
+            async () =>
+              await page
+                .getByLabel("播放位置")
+                .getAttribute("aria-description"),
+          )
+          .not.toContain("拍内 0 tick");
         await page.getByRole("button", { name: "暂停", exact: true }).click();
         const paused = await page.getByLabel("播放位置").innerText();
         await page.waitForTimeout(200);
         assert.equal(await page.getByLabel("播放位置").innerText(), paused);
         await page.getByLabel("终止", { exact: true }).click();
-        await expect(page.getByLabel("播放位置")).toContainText("001:01:00");
+        await expect(page.locator(".transport-position-value")).toHaveText([
+          "001",
+          "01",
+          "000",
+        ]);
         assert.equal(
           await page
             .locator(".arrangement-scroll")
@@ -429,7 +438,11 @@ async function drag(locator, from, to) {
         await expect(
           page.getByRole("button", { name: "播放", exact: true }),
         ).toBeVisible();
-        await expect(page.getByLabel("播放位置")).toContainText("001:01:00");
+        await expect(page.locator(".transport-position-value")).toHaveText([
+          "001",
+          "01",
+          "000",
+        ]);
         await page.getByRole("button", { name: "播放", exact: true }).click();
         await expect(
           page.getByRole("button", { name: "暂停", exact: true }),

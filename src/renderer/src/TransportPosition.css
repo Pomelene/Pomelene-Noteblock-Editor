@@ -1,0 +1,61 @@
+.transport-position {
+  /* Seven BAR slots cover the maximum project position, even at 1/16. */
+  display: grid;
+  width: 13.6ch;
+  box-sizing: content-box;
+  grid-template-columns: 7ch 0.8ch 2ch 0.8ch 3ch;
+  align-items: start;
+  flex: 0 0 auto;
+  height: 48px;
+  margin-left: 9px;
+  padding: 4px 10px;
+  border: 1px solid #1b2932;
+  border-radius: 4px;
+  background: #202d37;
+  box-shadow: inset 0 1px 5px #0003;
+  color: #c5d9e5;
+  font:
+    22px/27px Consolas,
+    "Liberation Mono",
+    monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+}
+.transport-position-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 27px 10px;
+  min-width: 0;
+  text-align: right;
+}
+.transport-position-value {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  letter-spacing: 0;
+}
+.transport-position-label {
+  color: #9db1bf;
+  font:
+    8px/10px "Segoe UI",
+    sans-serif;
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+.transport-position-bar .transport-position-label {
+  justify-self: end;
+  width: 3ch;
+  font-family: Consolas, "Liberation Mono", monospace;
+}
+.transport-position-separator {
+  color: #829cab;
+  text-align: center;
+}
+@media (max-width: 1250px) {
+  .transport-position {
+    margin-left: 3px;
+    padding-inline: 7px;
+    font-size: 20px;
+  }
+}

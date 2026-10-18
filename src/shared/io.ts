@@ -12,11 +12,9 @@ function migrate(old: LegacyProject & { nbs?: NbsMetadata }): Project {
   p.meter = old.meter;
   if (old.nbs) p.nbs = old.nbs;
   p.patterns = old.patterns.map((pattern) => {
-    const height = Math.max(
-      1,
-      pattern.layerCount ?? 0,
-      ...pattern.notes.map((n) => n.layer + 1),
-      old.nbs?.layers.length ?? 0,
+    const height = pattern.notes.reduce(
+      (max, n) => Math.max(max, n.layer + 1),
+      Math.max(1, pattern.layerCount ?? 0, old.nbs?.layers.length ?? 0),
     );
     if (height > 4096) throw new Error("图层数量超出限制");
     return {
