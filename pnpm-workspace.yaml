@@ -1,0 +1,6 @@
+# Native runtime setup is explicitly allowed for the desktop toolchain.
+allowBuilds:
+  electron: true
+  esbuild: true
+# Keep commands predictable when using an existing dependency install.
+verifyDepsBeforeRun: false
