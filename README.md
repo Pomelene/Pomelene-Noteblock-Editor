@@ -1,8 +1,10 @@
-# NoteBlock Editor 0.7.0
+# Pomelene Noteblock Editor 0.5.0
 
 Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录是独立重构工程，旧版 `desktop` 保留。
 
-远端代码仓库：[Pomelene/NoteBlock-Editor](https://github.com/Pomelene/NoteBlock-Editor)（私有）。`main` 保存当前代码，版本标签保留已交付源码，`legacy/desktop-0.2` 保留旧工程提交历史。开发与本地文件保留规则见 [仓库与产物管理](docs/repository-and-retention.md)。
+远端代码仓库：[Pomelene/Pomelene-Noteblock-Editor](https://github.com/Pomelene/Pomelene-Noteblock-Editor)（私有）。`main` 保存当前代码，版本标签保留已交付源码，`legacy/desktop-0.2` 保留旧工程提交历史。开发与本地文件保留规则见 [仓库与产物管理](docs/repository-and-retention.md)。
+
+正式命名后的开发预览版为 **0.5.0**，完整保留此前功能。下载 [Windows 便携包和独立源码包](https://github.com/Pomelene/Pomelene-Noteblock-Editor/releases/tag/pomelene-noteblock-editor-v0.5.0)。旧开发标签不移动，本版使用 `pomelene-noteblock-editor-v0.5.0`。
 
 采用源对象、编排引用、编辑视图三层模型。Pattern 是可编辑乐段，片段采样是只读的可复用音符快照，均可反复编排和打开多个内部或原生窗口。历史音频文件与乐器单音在“音频 / 乐器资源”中单独管理。主进程维护工程、历史及原生文件访问，音频通过 AudioContext 时钟调度并跨窗口协调。
 
@@ -35,7 +37,7 @@ Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录�
 
 保存选区会截取所选引用可见窗口内的触发事件，保留中间留白和末尾补白；不将音频识别成音符。片段音符和图层只读，音色仍引用当前工程的乐器资源；导入片段保留 tick 并跟随工程速度。新版本可读取旧 schema 2 工程；含新片段类型的工程需要 0.5 或更新版本。
 
-详细操作见 [使用说明](resources/使用说明.txt)。本轮见 [0.7.0 验收报告](docs/validation-0.7.0.md)，历史见 [0.6.1 报告](docs/validation-0.6.1.md)；算法依据见 [制作经验与算法依据](docs/smart-pattern-research.md)。
+详细操作见 [使用说明](resources/使用说明.txt)。本次正式命名发布见 [0.5.0 发布记录](docs/pomelene-noteblock-editor-0.5.0.md)，功能验收见 [此前开发验收报告](docs/validation-0.7.0.md)，历史见 [0.6.1 报告](docs/validation-0.6.1.md)；算法依据见 [制作经验与算法依据](docs/smart-pattern-research.md)。
 
 ## 本地开发
 

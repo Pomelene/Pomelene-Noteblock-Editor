@@ -27,7 +27,7 @@ const errors = [],
     executablePath: packaged
       ? process.env.NBE_EXE ||
         path.resolve(
-          `../deliverables/NoteBlockEditor-${version}/win-unpacked/NoteBlock Editor.exe`,
+          `../deliverables/PomeleneNoteblockEditor-${version}/win-unpacked/Pomelene Noteblock Editor.exe`,
         )
       : require("electron"),
     args: packaged ? [] : ["."],

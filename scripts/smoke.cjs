@@ -6,7 +6,7 @@ const packaged = process.argv.includes("--packaged");
 const exe =
   process.env.NBE_EXE ||
   path.resolve(
-    `../deliverables/NoteBlockEditor-${require("../package.json").version}/win-unpacked/NoteBlock Editor.exe`,
+    `../deliverables/PomeleneNoteblockEditor-${require("../package.json").version}/win-unpacked/Pomelene Noteblock Editor.exe`,
   );
 const results = path.resolve("test-results"),
   fixture = path.join(results, "roundtrip.nbproject"),
@@ -593,6 +593,32 @@ async function drag(locator, from, to) {
       "pending sample decode cannot place a clip into a replacement project",
       async () => {
         await page.locator(".studio-window").getByLabel("关闭窗口").click();
+        // Use a fresh, unused audio URL. Earlier playback can legitimately cache
+        // any built-in sample before this asynchronous-decode regression runs.
+        const wav = Buffer.alloc(46);
+        wav.write("RIFF", 0);
+        wav.writeUInt32LE(38, 4);
+        wav.write("WAVEfmt ", 8);
+        wav.writeUInt32LE(16, 16);
+        wav.writeUInt16LE(1, 20);
+        wav.writeUInt16LE(1, 22);
+        wav.writeUInt32LE(8000, 24);
+        wav.writeUInt32LE(16000, 28);
+        wav.writeUInt16LE(2, 32);
+        wav.writeUInt16LE(16, 34);
+        wav.write("data", 36);
+        wav.writeUInt32LE(2, 40);
+        const pendingFile = path.join(results, "pending-decode.wav");
+        fs.writeFileSync(pendingFile, wav);
+        await app.evaluate(
+          (_, file) => globalThis.testOpen.push(file),
+          pendingFile,
+        );
+        const imported = await page.evaluate(() =>
+          window.studio.file("importSample"),
+        );
+        assert.equal(imported.ok, true);
+        const pendingSampleId = imported.snapshot.project.samples.at(-1).id;
         await page.evaluate(() => {
           const original = AudioContext.prototype.decodeAudioData;
           globalThis.restoreDecode = () => {
@@ -607,7 +633,7 @@ async function drag(locator, from, to) {
             );
           };
         });
-        await page.getByTestId("source-vanilla-15").click();
+        await page.getByTestId("source-" + pendingSampleId).click();
         await page
           .getByTestId("playlist-canvas")
           .click({ position: { x: 180, y: 30 + 5 * 64 + 25 } });

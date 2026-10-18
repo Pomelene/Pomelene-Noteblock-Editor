@@ -1,8 +1,8 @@
 appId: studio.noteblock.editor
-productName: NoteBlock Editor
+productName: Pomelene Noteblock Editor
 directories:
-  output: ../deliverables/NoteBlockEditor-0.7.0
-artifactName: NoteBlockEditor-${version}-windows-${arch}.${ext}
+  output: ../deliverables/PomeleneNoteblockEditor-0.5.0
+artifactName: PomeleneNoteblockEditor-${version}-windows-${arch}.${ext}
 files:
   - out/**/*
   - package.json
@@ -14,4 +14,4 @@ extraFiles:
 win:
   icon: resources/icon.ico
   target: zip
-  executableName: NoteBlock Editor
+  executableName: Pomelene Noteblock Editor

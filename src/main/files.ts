@@ -95,7 +95,7 @@ export function nativeFileDialogs(
           filters: [
             kind === "project"
               ? {
-                  name: "NoteBlock Project / Song",
+                  name: "Pomelene Noteblock Project / NBS Song",
                   extensions: ["nbproject", "nbs"],
                 }
               : kind === "phrase"
@@ -140,7 +140,7 @@ export function nativeFileDialogs(
             {
               name:
                 format === "project"
-                  ? "NoteBlock Project"
+                  ? "Pomelene Noteblock Project"
                   : format === "nbs"
                     ? "Note Block Song"
                     : "Instrument audio ZIP",

@@ -58,7 +58,7 @@ function update(): void {
   broadcast("studio:snapshot", snapshot);
   if (main && !main.isDestroyed())
     main.setTitle(
-      `${snapshot.document.dirty ? "● " : ""}${snapshot.project.title} — NoteBlock Editor`,
+      `${snapshot.document.dirty ? "● " : ""}${snapshot.project.title} — Pomelene Noteblock Editor`,
     );
 }
 function trusted(event: IpcMainInvokeEvent): void {
@@ -93,7 +93,7 @@ function createWindow(kind?: EditorKind, id?: string): BrowserWindow {
     minHeight: kind ? 400 : 640,
     show: false,
     backgroundColor: "#25282b",
-    title: "NoteBlock Editor",
+    title: "Pomelene Noteblock Editor",
     icon: join(here, "../renderer/icon.png"),
     autoHideMenuBar: true,
     webPreferences: {

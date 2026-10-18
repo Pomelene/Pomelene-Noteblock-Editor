@@ -696,7 +696,7 @@ export function App() {
     return (
       <div className="startup">
         <Blocks size={36} />
-        <strong>NoteBlock Editor</strong>
+        <strong>Pomelene Noteblock Editor</strong>
         <span>正在载入工作区…</span>
       </div>
     );
@@ -1030,10 +1030,10 @@ export function App() {
                     action: showShortcutHelp,
                   },
                   {
-                    label: "关于 NoteBlock Editor",
+                    label: "关于 Pomelene Noteblock Editor",
                     action: () =>
                       setInfo({
-                        title: "NoteBlock Editor 0.7.0",
+                        title: "Pomelene Noteblock Editor 0.5.0",
                         body: (
                           <p>
                             Windows 桌面编辑器 · 新工作区
@@ -1064,7 +1064,7 @@ export function App() {
             ))}
             <span className="spacer" />
             <span className="version-label">
-              NOTE<b>BLOCK</b> <small>0.7</small>
+              POMELENE <b>NOTEBLOCK EDITOR</b> <small>0.5.0</small>
             </span>
           </div>
           <header className="transport-bar">

@@ -1,6 +1,6 @@
 # 仓库与本地产物管理
 
-代码仓库：https://github.com/Pomelene/NoteBlock-Editor ，私有可见。
+代码仓库：https://github.com/Pomelene/Pomelene-Noteblock-Editor ，私有可见。
 
 ## 代码备份
 
@@ -21,10 +21,12 @@
 - 需要重新分发运行版时，从当前源码重新构建、打包；分发结束后可以清理冗余压缩包。
 - 清理前核对绝对路径，保护源码、用户工程、当前运行版本和仍被引用的依赖目录；记录清理项、释放空间和源码哈希验证结果。
 
-截至 2026-10-19，本地应用保留 0.7.0；0.2.0、0.2.1、0.3.0、0.4.0、0.5.0、0.6.0、0.6.1 的运行副本已经清理，源码归档继续保留。最新应用的 Windows ZIP 也作为冗余分发副本清理，只保留可直接运行的解压目录。
+正式命名前曾保留 0.7.0 开发运行版；本次正式命名交付后保留 Pomelene Noteblock Editor 0.5.0，旧编号的运行副本均已清理，源码归档继续保留。最新应用的 Windows ZIP 也作为冗余分发副本清理，只保留可直接运行的解压目录。
 
 开发机 `desktop-next/node_modules` 仍通过目录联接引用 `desktop/node_modules`。该目录包含当前开发依赖和构建所需 Electron runtime，不能因为 desktop 是旧工程就整目录删除。旧工程源码保留，旧的 release/out/test-results 可以清理。
 
 具体清理记录位于开发工作区的 `deliverables/cleanup-2026-10-18.json 和 deliverables/cleanup-2026-10-18-0.6.json`。历史验收记录里的旧运行路径和 Windows ZIP 哈希属于当时的发布证据，不表示这些大文件仍保留在本机。
 
 0.7.0 清理记录：deliverables/cleanup-2026-10-19-0.7.0.json；最新源码 ZIP 与 verification 验证报告随当前运行目录分开保存。
+
+2026-10-19 正式命名为 Pomelene Noteblock Editor，用户指定正式版本 0.5.0；发布标签 pomelene-noteblock-editor-v0.5.0，原 v0.5.0 不移动。当前应用目录改为 deliverables/PomeleneNoteblockEditor-0.5.0/win-unpacked。Windows 和源码 ZIP 上传同仓库 Releases 后，本地清理冗余运行 ZIP 与此前 0.7.0 运行目录；历史源码保留。
