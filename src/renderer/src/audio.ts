@@ -357,6 +357,22 @@ export class AudioEngine {
       throw error;
     }
   }
+  async adoptTransport(project: Project, state: TransportState): Promise<void> {
+    this.cancel();
+    this.project = project;
+    this.owns = true;
+    this.remoteOwner = undefined;
+    const generation = this.generation;
+    await this.signal({ type: "claim", owner: this.owner });
+    if (generation !== this.generation) return;
+    this.setState({
+      ...state,
+      status: state.status === "stopped" ? "stopped" : "paused",
+      error: undefined,
+    });
+    if (state.status === "playing" || state.status === "loading")
+      await this.play(project, state.scope);
+  }
   pause(): void {
     if (!this.owns && this.remoteOwner && !this.loading) {
       void this.signal({ type: "control", command: "pause" }).catch(() => {});

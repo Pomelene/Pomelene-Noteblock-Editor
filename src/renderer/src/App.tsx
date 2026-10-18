@@ -28,6 +28,10 @@ import { PatternEditor } from "./PatternEditor";
 import { SampleEditor } from "./SampleEditor";
 import { PhrasePreview } from "./PhrasePreview";
 import { ImportDialog, ImportSummary } from "./ImportDialog";
+import { resolveShortcut } from "./shortcuts";
+import { ShortcutHelp } from "./ShortcutHelp";
+import { layoutWindows } from "./windowGeometry";
+import type { FrameView } from "./WindowFrame";
 import {
   ticksPerBar,
   type FileAction,
@@ -57,6 +61,18 @@ export function App() {
       "all",
     ),
     [sidebarWidth, setSidebarWidth] = useState(224);
+  const [playlistView, setPlaylistView] = useState<FrameView>({
+    id: "playlist",
+    kind: "playlist",
+    sourceId: "song",
+    x: 18,
+    y: 18,
+    w: 920,
+    h: 510,
+    state: "maximized",
+    z: 1,
+  });
+  const [browserVisible, setBrowserVisible] = useState(true);
   const [menuState, setMenuState] = useState<{
       x: number;
       y: number;
@@ -140,16 +156,59 @@ export function App() {
     initialGeneration.current = snapshot.generation;
     setViews([]);
     setActive("");
+    setPlaylistView((v) => ({ ...v, state: "maximized", z: 1 }));
     setSource(
-      nativeKind && nativeId
+      nativeKind && nativeKind !== "playlist" && nativeId
         ? { kind: nativeSourceKind, id: nativeId }
         : snapshot.project.patterns.length
           ? { kind: "pattern", id: snapshot.project.patterns[0].id }
           : { kind: "sample", id: snapshot.project.samples[0]?.id ?? "" },
     );
-    if (nativeKind) setMode("source");
+    if (nativeKind) setMode(nativeKind === "playlist" ? "song" : "source");
   }, [snapshot?.generation]);
   const project = snapshot?.project;
+  useEffect(() => {
+    if (!project || nativeKind) return;
+    setSource((old) => {
+      if (getSource(project, old)) return old;
+      if (project.patterns[0])
+        return { kind: "pattern", id: project.patterns[0].id };
+      if (project.phrases?.[0])
+        return { kind: "phrase", id: project.phrases[0].id };
+      return { kind: "sample", id: project.samples[0]?.id ?? "" };
+    });
+    setViews((old) => {
+      const valid = old.filter((v) =>
+        getSource(project, { kind: v.kind, id: v.sourceId }),
+      );
+      return valid.length === old.length ? old : valid;
+    });
+  }, [project]);
+  useEffect(() => {
+    if (
+      nativeKind ||
+      !project ||
+      !active ||
+      views.some(
+        (v) =>
+          v.id === active &&
+          v.state !== "minimized" &&
+          getSource(project, { kind: v.kind, id: v.sourceId }),
+      )
+    )
+      return;
+    const next = views
+      .filter(
+        (v) =>
+          v.state !== "minimized" &&
+          getSource(project, { kind: v.kind, id: v.sourceId }),
+      )
+      .sort((a, b) => b.z - a.z)[0];
+    setActive(next?.id ?? "");
+    if (next) setSource({ kind: next.kind, id: next.sourceId });
+    if (next || playlistView.state !== "minimized")
+      requestAnimationFrame(() => focusEditor(next?.id ?? ""));
+  }, [project, views, active, playlistView.state]);
   async function run(command: Command) {
     try {
       const s = await execute(command, snapshot?.generation);
@@ -211,6 +270,12 @@ export function App() {
   }
   function openView(s: Source) {
     if (!project) return;
+    if (nativeKind) {
+      void window.studio
+        .openEditor(s.kind, s.id)
+        .catch((e) => setError(cleanError(e)));
+      return;
+    }
     setSource(s);
     const rect = workspace.current?.getBoundingClientRect(),
       count = views.filter((v) => v.state === "normal").length,
@@ -230,7 +295,81 @@ export function App() {
       },
     ]);
     setActive(id);
+    requestAnimationFrame(() => focusEditor(id));
   }
+  function focusEditor(id: string) {
+    const frame = document.querySelector(
+      `[data-view-id="${id || "playlist"}"]`,
+    );
+    (
+      frame?.querySelector(
+        ".playlist,.pattern-editor,.phrase-preview,.sample-editor",
+      ) as HTMLElement | null
+    )?.focus({ preventScroll: true });
+  }
+  function showPlaylist() {
+    if (nativeKind) {
+      if (nativeKind === "playlist")
+        document.querySelector<HTMLElement>(".playlist")?.focus();
+      else
+        void window.studio
+          .openEditor("playlist", "song")
+          .catch((e) => setError(cleanError(e)));
+      return;
+    }
+    setActive("");
+    setPlaylistView((v) => ({
+      ...v,
+      state: v.state === "minimized" ? "normal" : v.state,
+      z: ++z.current,
+    }));
+    requestAnimationFrame(() => focusEditor(""));
+  }
+  function arrangeWindows(mode: "tile" | "cascade") {
+    const bounds = {
+      width: workspace.current?.clientWidth ?? 1000,
+      height: workspace.current?.clientHeight ?? 650,
+    };
+    const frames = [playlistView, ...views];
+    const rects = layoutWindows(frames, bounds, mode);
+    setPlaylistView((v) => ({
+      ...v,
+      ...rects[0],
+      state: "normal",
+      z: ++z.current,
+    }));
+    setViews((vs) =>
+      vs.map((v, i) => ({
+        ...v,
+        ...rects[i + 1],
+        state: "normal",
+        z: ++z.current,
+      })),
+    );
+    requestAnimationFrame(() => focusEditor(active));
+  }
+  function showShortcutHelp() {
+    setInfo({
+      title: "操作与快捷键",
+      className: "shortcut-help-dialog",
+      body: <ShortcutHelp />,
+    });
+  }
+  useEffect(() => {
+    if (nativeKind) return;
+    return window.studio.onDockEditor((editor) => {
+      if (editor.generation !== currentGeneration()) return;
+      if (editor.kind === "playlist") showPlaylist();
+      else openView({ kind: editor.kind, id: editor.id });
+      if (editor.transport && project) {
+        const state = editor.transport;
+        setMode(state.scope === "song" ? "song" : "source");
+        void audio
+          .adoptTransport(project, state)
+          .catch((e) => setError(cleanError(e)));
+      }
+    });
+  }, [snapshot?.generation, views, project]);
   const showMenu = (x: number, y: number, items: MenuItem[]) =>
     setMenuState({ x, y, items });
   const requestText: RequestText = (title, value, submit) =>
@@ -386,67 +525,147 @@ export function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
       if (document.querySelector("dialog[open]")) return;
-      const mod = e.ctrlKey || e.metaKey,
-        key = e.key.toLowerCase();
-      if (
-        (key === "z" || key === "y") &&
-        (e.target as HTMLElement).matches(
-          "input,textarea,[contenteditable=true]",
+      const action = resolveShortcut(e, "global");
+      if (action) {
+        e.preventDefault();
+        if (action === "source:rename" && project) {
+          const obj = getSource(project, source);
+          if (obj)
+            requestText(
+              "重命名",
+              obj.name,
+              (name) =>
+                void run(
+                  source.kind === "pattern"
+                    ? { type: "pattern:update", id: source.id, patch: { name } }
+                    : source.kind === "phrase"
+                      ? {
+                          type: "phrase:update",
+                          id: source.id,
+                          patch: { name },
+                        }
+                      : {
+                          type: "sample:update",
+                          id: source.id,
+                          patch: { name },
+                        },
+                ),
+            );
+        } else if (action === "project:newPattern") void createPattern();
+        else if (action.startsWith("file:")) {
+          (document.activeElement as HTMLElement)?.blur();
+          const actions = {
+            "file:new": "new",
+            "file:open": "open",
+            "file:save": "save",
+            "file:saveAs": "saveAs",
+            "file:export": "exportNbs",
+          } as const;
+          const fileAction = actions[action as keyof typeof actions];
+          if (fileAction) void file(fileAction);
+        } else if (action === "history:undo" || action === "history:redo")
+          void run({ type: action === "history:undo" ? "undo" : "redo" });
+        else if (action === "transport:toggle") playPause();
+        else if (
+          action === "transport:stop" &&
+          !menuState &&
+          transport.status !== "stopped"
         )
-      )
-        return;
-      if (mod && ["n", "o", "s", "e", "z", "y"].includes(key)) {
-        e.preventDefault();
-        (document.activeElement as HTMLElement)?.blur();
-        if (key === "z" || key === "y")
-          void run({ type: key === "y" || e.shiftKey ? "redo" : "undo" });
-        else
-          void file(
-            key === "s"
-              ? e.shiftKey
-                ? "saveAs"
-                : "save"
-              : key === "o"
-                ? "open"
-                : key === "n"
-                  ? "new"
-                  : "exportNbs",
-          );
-        return;
-      }
-      if (
-        (e.target as HTMLElement).matches("input,textarea,select") ||
-        document.querySelector("dialog[open]")
-      )
-        return;
-      if (e.code === "Space") {
-        e.preventDefault();
-        playPause();
-      }
-      if (e.key === "Escape" && !menuState) {
-        if (transport.status !== "stopped") stop();
-      }
-      if (e.key === "F2" && project) {
-        e.preventDefault();
-        const obj = getSource(project, source);
-        if (obj)
-          requestText(
-            "重命名",
-            obj.name,
-            (name) =>
-              void run(
-                source.kind === "pattern"
-                  ? { type: "pattern:update", id: source.id, patch: { name } }
-                  : source.kind === "phrase"
-                    ? { type: "phrase:update", id: source.id, patch: { name } }
-                    : { type: "sample:update", id: source.id, patch: { name } },
+          stop();
+        else if (action === "help:show") showShortcutHelp();
+        else if (action === "window:playlist") showPlaylist();
+        else if (action === "window:source") {
+          const existing = views
+            .filter((v) => v.sourceId === source.id && v.kind === source.kind)
+            .sort((a, b) => b.z - a.z)[0];
+          if (existing && !nativeKind) {
+            setActive(existing.id);
+            setViews((vs) =>
+              vs.map((v) =>
+                v.id === existing.id
+                  ? {
+                      ...v,
+                      state: v.state === "minimized" ? "normal" : v.state,
+                      z: ++z.current,
+                    }
+                  : v,
               ),
-          );
+            );
+            requestAnimationFrame(() => focusEditor(existing.id));
+          } else openView(source);
+        } else if (action === "window:minimizeAll") {
+          if (nativeKind) void window.studio.controlWindow("minimize");
+          else {
+            setViews((vs) => vs.map((v) => ({ ...v, state: "minimized" })));
+            setPlaylistView((v) => ({ ...v, state: "minimized" }));
+            (document.activeElement as HTMLElement)?.blur();
+          }
+        } else if (action === "window:tile") {
+          if (!nativeKind) arrangeWindows("tile");
+        } else if (action === "window:maximize") {
+          if (nativeKind) void window.studio.controlWindow("maximize");
+          else if (!active)
+            setPlaylistView((v) => ({
+              ...v,
+              state: v.state === "maximized" ? "normal" : "maximized",
+            }));
+          else
+            setViews((vs) =>
+              vs.map((v) =>
+                v.id === active
+                  ? {
+                      ...v,
+                      state: v.state === "maximized" ? "normal" : "maximized",
+                    }
+                  : v,
+              ),
+            );
+        } else if (action === "window:cycle" && !nativeKind) {
+          const candidates = [
+            "",
+            ...views
+              .filter(
+                (v) =>
+                  v.state !== "minimized" &&
+                  project &&
+                  getSource(project, { kind: v.kind, id: v.sourceId }),
+              )
+              .map((v) => v.id),
+          ].filter((id) => id || playlistView.state !== "minimized");
+          if (!candidates.length) return;
+          const index = candidates.indexOf(active),
+            direction = e.shiftKey ? -1 : 1;
+          const next =
+            candidates[
+              (index + direction + candidates.length) % candidates.length
+            ];
+          if (!next) showPlaylist();
+          else {
+            setActive(next);
+            const v = views.find((v) => v.id === next)!;
+            setSource({ kind: v.kind, id: v.sourceId });
+            setViews((vs) =>
+              vs.map((v) => (v.id === next ? { ...v, z: ++z.current } : v)),
+            );
+            requestAnimationFrame(() => focusEditor(next));
+          }
+        }
+        return;
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [snapshot, source, mode, transport.status, busy, menuState]);
+  }, [
+    snapshot,
+    source,
+    mode,
+    transport.status,
+    busy,
+    menuState,
+    views,
+    active,
+    playlistView,
+  ]);
   if (!snapshot || !project)
     return (
       <div className="startup">
@@ -595,6 +814,24 @@ export function App() {
       <span className="source-index">{String(index + 1).padStart(2, "0")}</span>
     </button>
   );
+  const renderPlaylist = () => (
+    <Playlist
+      project={project}
+      source={source}
+      chooseSource={setSource}
+      run={run}
+      open={openView}
+      menu={showMenu}
+      text={requestText}
+      tick={transport.scope === "song" ? transport.tick : 0}
+      seek={(n) => {
+        setMode("song");
+        audio.seek(n, "song");
+      }}
+      stopped={stops}
+      report={setStatus}
+    />
+  );
   return (
     <div
       className={`studio ${nativeKind ? "native-studio" : ""}`}
@@ -698,22 +935,40 @@ export function App() {
                   },
                   {
                     label: "排列窗口",
-                    action: () =>
-                      setViews((v) =>
-                        v.map((w, i) => ({
-                          ...w,
-                          x: 20 + i * 28,
-                          y: 30 + i * 26,
-                          state: "normal" as const,
-                        })),
-                      ),
+                    action: () => arrangeWindows("cascade"),
+                  },
+                  {
+                    label: "平铺所有窗口",
+                    shortcut: "Ctrl+Shift+H",
+                    action: () => arrangeWindows("tile"),
+                  },
+                  {
+                    label: "显示整曲编排",
+                    shortcut: "F5",
+                    action: showPlaylist,
+                  },
+                  {
+                    label: "打开所选对象",
+                    shortcut: "F7",
+                    disabled: !selectedObj,
+                    action: () => openView(source),
+                  },
+                  {
+                    label: browserVisible ? "隐藏对象浏览器" : "显示对象浏览器",
+                    action: () => setBrowserVisible((v) => !v),
                   },
                   {
                     label: "恢复所有窗口",
-                    action: () =>
+                    action: () => {
+                      setPlaylistView((v) => ({
+                        ...v,
+                        state: "normal",
+                        z: ++z.current,
+                      }));
                       setViews((v) =>
                         v.map((w) => ({ ...w, state: "normal" as const })),
-                      ),
+                      );
+                    },
                   },
                   { label: "关闭全部编辑窗口", action: () => setViews([]) },
                 ],
@@ -744,34 +999,14 @@ export function App() {
                   },
                   {
                     label: "操作与快捷键",
-                    action: () =>
-                      setInfo({
-                        title: "编辑快捷键",
-                        body: (
-                          <>
-                            <p>
-                              左键放置或拖动，右键删除；Ctrl
-                              空白处拖动框选。Shift 拖动复制，Alt
-                              临时关闭吸附。列表右键打开菜单。
-                            </p>
-                            <p>
-                              Ctrl+C / X / V 复制、剪切、粘贴；Ctrl+B
-                              接续复制；Delete
-                              删除；方向键微调；Shift+上下移调八度。
-                            </p>
-                            <p>
-                              空格播放／暂停，终止按钮一次归零。Ctrl+S
-                              保存工程，Ctrl+E 导出 NBS。
-                            </p>
-                          </>
-                        ),
-                      }),
+                    shortcut: "F1",
+                    action: showShortcutHelp,
                   },
                   {
                     label: "关于 NoteBlock Editor",
                     action: () =>
                       setInfo({
-                        title: "NoteBlock Editor 0.5.0",
+                        title: "NoteBlock Editor 0.6.0",
                         body: (
                           <p>
                             Windows 桌面编辑器 · 新工作区
@@ -802,7 +1037,7 @@ export function App() {
             ))}
             <span className="spacer" />
             <span className="version-label">
-              NOTE<b>BLOCK</b> <small>0.5</small>
+              NOTE<b>BLOCK</b> <small>0.6</small>
             </span>
           </div>
           <header className="transport-bar">
@@ -1003,11 +1238,13 @@ export function App() {
         <div className="native-bar">
           <Blocks size={15} />
           <b>
-            {nativeKind === "pattern"
-              ? "Pattern 编辑实例"
-              : nativeKind === "phrase"
-                ? "片段采样 · 只读预览"
-                : "音频资源实例"}
+            {nativeKind === "playlist"
+              ? "Playlist · 整曲编排"
+              : nativeKind === "pattern"
+                ? "Pattern 编辑实例"
+                : nativeKind === "phrase"
+                  ? "片段采样 · 只读预览"
+                  : "音频资源实例"}
           </b>
           <span className="spacer" />
           <button
@@ -1026,11 +1263,35 @@ export function App() {
           <button aria-label="保存工程" onClick={() => void file("save")}>
             <Save size={14} />
           </button>
+          <button
+            aria-label="停靠回主窗口"
+            title="停靠回主窗口"
+            onClick={() =>
+              void window.studio
+                .dockEditor()
+                .catch((e) => setError(cleanError(e)))
+            }
+          >
+            停靠
+          </button>
+          <button
+            aria-label="操作与快捷键"
+            title="快捷键 F1"
+            onClick={showShortcutHelp}
+          >
+            F1
+          </button>
         </div>
       )}
       {!nativeKind ? (
         <div className="studio-body">
-          <aside className="source-browser" style={{ width: sidebarWidth }}>
+          <aside
+            className="source-browser"
+            style={{
+              width: sidebarWidth,
+              display: browserVisible ? undefined : "none",
+            }}
+          >
             <div className="browser-title">
               <FolderOpen size={14} />
               <strong>对象浏览器</strong>
@@ -1248,6 +1509,7 @@ export function App() {
           </aside>
           <div
             className="browser-resizer"
+            style={{ display: browserVisible ? undefined : "none" }}
             onPointerDown={(e) => {
               const el = e.currentTarget,
                 start = e.clientX,
@@ -1265,21 +1527,33 @@ export function App() {
           />
           <div className="work-area">
             <div className="workspace" ref={workspace}>
-              <Playlist
-                project={project}
-                source={source}
-                run={run}
-                open={openView}
-                menu={showMenu}
-                text={requestText}
-                tick={transport.scope === "song" ? transport.tick : 0}
-                seek={(n) => {
-                  setMode("song");
-                  audio.seek(n, "song");
+              <WindowFrame
+                view={playlistView}
+                className="arrangement-window"
+                title="Playlist · 整曲编排"
+                active={!active}
+                onChange={(patch) =>
+                  setPlaylistView((v) => ({ ...v, ...patch }))
+                }
+                onFocus={() => {
+                  if (active) setActive("");
+                  if (active || playlistView.z < z.current)
+                    setPlaylistView((v) => ({ ...v, z: ++z.current }));
                 }}
-                stopped={stops}
-                report={setStatus}
-              />
+                onClose={() =>
+                  setPlaylistView((v) => ({ ...v, state: "minimized" }))
+                }
+                onPopout={() =>
+                  void window.studio
+                    .openEditor("playlist", "song")
+                    .then(() =>
+                      setPlaylistView((v) => ({ ...v, state: "minimized" })),
+                    )
+                    .catch((e) => setError(cleanError(e)))
+                }
+              >
+                {renderPlaylist()}
+              </WindowFrame>
               {views
                 .filter(
                   (v) => !!getSource(project, { kind: v.kind, id: v.sourceId }),
@@ -1296,7 +1570,9 @@ export function App() {
                     onChange={(patch) =>
                       setViews((v) =>
                         v.map((w) =>
-                          w.id === view.id ? { ...w, ...patch } : w,
+                          w.id === view.id
+                            ? { ...w, ...patch, kind: w.kind }
+                            : w,
                         ),
                       )
                     }
@@ -1328,10 +1604,7 @@ export function App() {
             <div className="window-dock">
               <button
                 className={!active ? "active" : ""}
-                onClick={() => {
-                  setActive("");
-                  setViews((v) => v.map((w) => ({ ...w, state: "minimized" })));
-                }}
+                onClick={showPlaylist}
               >
                 <Grid2X2 size={13} />
                 Playlist
@@ -1358,6 +1631,7 @@ export function App() {
                           : w,
                       ),
                     );
+                    requestAnimationFrame(() => focusEditor(view.id));
                   }}
                 >
                   {view.kind === "pattern" ? (
@@ -1380,10 +1654,12 @@ export function App() {
         </div>
       ) : (
         <div className="native-content">
-          {renderEditor({
-            kind: nativeSourceKind,
-            id: nativeId ?? "",
-          })}
+          {nativeKind === "playlist"
+            ? renderPlaylist()
+            : renderEditor({
+                kind: nativeSourceKind,
+                id: nativeId ?? "",
+              })}
         </div>
       )}
       {error && (

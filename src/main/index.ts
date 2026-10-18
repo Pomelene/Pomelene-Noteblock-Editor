@@ -8,6 +8,8 @@ import type {
   FileAction,
   Note,
   TransportState,
+  EditorKind,
+  DockedEditor,
 } from "../shared/model";
 import { Session } from "../shared/session";
 import { ProjectFiles } from "./files";
@@ -19,6 +21,10 @@ const here = dirname(fileURLToPath(import.meta.url)),
 const session = new Session(),
   windows = new Set<BrowserWindow>(),
   editors = new Set<BrowserWindow>();
+const editorSources = new Map<
+  BrowserWindow,
+  { kind: EditorKind; id: string }
+>();
 const imports = new ImportBroker();
 let main: BrowserWindow | undefined,
   allowClose = false,
@@ -79,10 +85,7 @@ function current(payload: unknown): Record<string, unknown> {
     throw new Error("工程已切换，请使用当前工程视图");
   return object;
 }
-function createWindow(
-  kind?: "pattern" | "phrase" | "sample",
-  id?: string,
-): BrowserWindow {
+function createWindow(kind?: EditorKind, id?: string): BrowserWindow {
   const win = new BrowserWindow({
     width: kind ? 1000 : 1480,
     height: kind ? 700 : 900,
@@ -103,7 +106,10 @@ function createWindow(
     },
   });
   windows.add(win);
-  if (kind) editors.add(win);
+  if (kind && id) {
+    editors.add(win);
+    editorSources.set(win, { kind, id });
+  }
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event) => event.preventDefault());
   win.webContents.on("will-attach-webview", (event) => event.preventDefault());
@@ -123,6 +129,7 @@ function createWindow(
     imports.cancelFor(win.id);
     windows.delete(win);
     editors.delete(win);
+    editorSources.delete(win);
     if (audioOwner?.window === win) {
       const owner = audioOwner.owner;
       audioOwner = undefined;
@@ -279,18 +286,46 @@ app.whenReady().then(() => {
     const p = current(payload),
       project = session.snapshot().project;
     if (
-      (p.kind !== "pattern" && p.kind !== "phrase" && p.kind !== "sample") ||
+      !["pattern", "phrase", "sample", "playlist"].includes(p.kind as string) ||
       typeof p.id !== "string" ||
-      !(
-        p.kind === "pattern"
-          ? project.patterns
-          : p.kind === "phrase"
-            ? (project.phrases ?? [])
-            : project.samples
-      ).some((s) => s.id === p.id)
+      !(p.kind === "playlist"
+        ? p.id === "song"
+        : (p.kind === "pattern"
+            ? project.patterns
+            : p.kind === "phrase"
+              ? (project.phrases ?? [])
+              : project.samples
+          ).some((s) => s.id === p.id))
     )
       throw new Error("编辑对象不存在");
-    createWindow(p.kind, p.id);
+    createWindow(p.kind as EditorKind, p.id);
+  });
+  handle("studio:controlWindow", (event, payload) => {
+    const p = current(payload);
+    const win = BrowserWindow.fromWebContents(event.sender)!;
+    if (p.action === "maximize") {
+      if (win.isMaximized()) win.unmaximize();
+      else win.maximize();
+    } else if (p.action === "minimize") win.minimize();
+    else throw new Error("窗口操作无效");
+  });
+  handle("studio:dockEditor", (event, payload) => {
+    current(payload);
+    const win = BrowserWindow.fromWebContents(event.sender)!;
+    const source = editorSources.get(win);
+    if (!source || !main || main.isDestroyed())
+      throw new Error("没有可停靠的编辑窗口");
+    const dock: DockedEditor = {
+      ...source,
+      generation: session.documentGeneration,
+      transport: audioOwner?.window === win ? audioOwner.state : undefined,
+    };
+    // Closing releases the former audio owner before the main renderer resumes it.
+    win.close();
+    if (main.isMinimized()) main.restore();
+    main.show();
+    main.focus();
+    main.webContents.send("studio:dockEditor", dock);
   });
   handle("studio:audio", (event, payload) => {
     const p = current(payload);
@@ -360,22 +395,26 @@ app.whenReady().then(() => {
           {
             label: "新建工程",
             accelerator: "CmdOrCtrl+N",
+            registerAccelerator: false,
             click: () => void doFile("new"),
           },
           {
             label: "打开…",
             accelerator: "CmdOrCtrl+O",
+            registerAccelerator: false,
             click: () => void doFile("open"),
           },
           { type: "separator" },
           {
             label: "保存",
             accelerator: "CmdOrCtrl+S",
+            registerAccelerator: false,
             click: () => void doFile("save"),
           },
           {
             label: "另存为…",
             accelerator: "CmdOrCtrl+Shift+S",
+            registerAccelerator: false,
             click: () => void doFile("saveAs"),
           },
           { label: "导出 NBS…", click: () => void doFile("exportNbs") },

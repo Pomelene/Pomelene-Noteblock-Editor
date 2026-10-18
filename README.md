@@ -1,4 +1,4 @@
-# NoteBlock Editor 0.5.0
+# NoteBlock Editor 0.6.0
 
 Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录是独立重构工程，旧版 `desktop` 保留。
 
@@ -16,6 +16,9 @@ Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录�
 - 钢琴卷帘、NBS 图层视图、音高/音色/力度/声像/微调、力度拖动、基础和弦放置。
 - 16 个实际原版采样，真实 PCM 波形，采样预听设置，自定义乐器调音与路径管理。
 - 多编辑实例、八方向缩放、最大化/还原、最小化、原生弹出；列表右键菜单与画布右键擦除。
+- 整曲 Playlist 也作为子窗口，可与 Pattern 平铺、层叠；所有编辑器可弹出成系统窗口并停靠回主工作区，共享工程和撤销。
+- 按上下文分派快捷键，F1 搜索操作；支持选区反选/取消、音符八度移动、网格切换、定位、缩放预设与窗口切换。输入框保留文字编辑。
+- Pattern 显眼的音色选择栏显示各音色音符数量；聚焦当前音色时，其余音色音符和力度条半透明，支持显示全部。
 - 独立播放/暂停和终止，暂停精确保留位置，一次终止归零；SONG / Pattern / Sample 范围。
 - 原生文件对话框，原子写入、失败保留原文件、未保存保护、完整工程保存/重开。
 - NBS v0–5 读取、v5 导出、旧工程迁移；自定义 NBS 定义及音频 ZIP 自动匹配，音频包导出。
@@ -27,7 +30,7 @@ Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录�
 
 保存选区会截取所选引用可见窗口内的触发事件，保留中间留白和末尾补白；不将音频识别成音符。片段音符和图层只读，音色仍引用当前工程的乐器资源；导入片段保留 tick 并跟随工程速度。新版本可读取旧 schema 2 工程；含新片段类型的工程需要 0.5 或更新版本。
 
-详细操作见 [使用说明](resources/使用说明.txt)。研究见 [制作经验与算法依据](docs/smart-pattern-research.md)，本轮验证见 [0.5 验收报告](docs/validation-0.5.0.md)，智能整理基线见 [0.4 报告](docs/validation-0.4.0.md)。
+详细操作见 [使用说明](resources/使用说明.txt)。本轮见 [0.6 验收报告](docs/validation-0.6.0.md)，历史见 [0.5 验收报告](docs/validation-0.5.0.md)；算法依据见 [制作经验与算法依据](docs/smart-pattern-research.md)。
 
 ## 本地开发
 
@@ -41,6 +44,7 @@ pnpm build
 pnpm smoke
 pnpm smoke:smart
 pnpm smoke:phrases
+pnpm smoke:workspace
 pnpm pack:win
 pnpm smoke:packaged
 ```
@@ -56,6 +60,7 @@ node node_modules/electron-builder/cli.js --win zip --x64
 node scripts/smoke.cjs
 node scripts/smart-import-smoke.cjs
 node scripts/phrase-interaction-smoke.cjs
+node scripts/workspace-shortcuts-smoke.cjs
 node scripts/analyze-nbs.cjs 'D:/path/to/Songs'
 ```
 

@@ -7,6 +7,7 @@ import type {
   Snapshot,
   StudioAPI,
   ImportPrompt,
+  DockedEditor,
 } from "../shared/model";
 
 let generation: number | undefined;
@@ -47,6 +48,13 @@ const api: StudioAPI = {
   },
   openEditor: async (kind, id) => {
     await ipcRenderer.invoke("studio:openEditor", { generation, kind, id });
+  },
+  dockEditor: async () => {
+    await ipcRenderer.invoke("studio:dockEditor", { generation });
+  },
+  onDockEditor: (fn) => subscribe<DockedEditor>("studio:dockEditor", fn),
+  controlWindow: async (action) => {
+    await ipcRenderer.invoke("studio:controlWindow", { generation, action });
   },
   audioSignal: async (signal: AudioSignal) => {
     await ipcRenderer.invoke("studio:audio", { generation, signal });

@@ -232,6 +232,13 @@ export type AudioSignal =
       command: "pause" | "stop" | "play" | "seek";
       tick?: number;
     };
+export type EditorKind = "pattern" | "phrase" | "sample" | "playlist";
+export interface DockedEditor {
+  kind: EditorKind;
+  id: string;
+  generation: number;
+  transport?: TransportState;
+}
 export interface StudioAPI {
   onImportPrompt(fn: (prompt: ImportPrompt | null) => void): () => void;
   respondImport(
@@ -242,7 +249,10 @@ export interface StudioAPI {
   dispatch(command: Command, originGeneration?: number): Promise<Snapshot>;
   onSnapshot(fn: (s: Snapshot) => void): () => void;
   file(action: FileAction): Promise<FileResult>;
-  openEditor(kind: "pattern" | "phrase" | "sample", id: string): Promise<void>;
+  openEditor(kind: EditorKind, id: string): Promise<void>;
+  dockEditor(): Promise<void>;
+  onDockEditor(fn: (editor: DockedEditor) => void): () => void;
+  controlWindow(action: "maximize" | "minimize"): Promise<void>;
   audioSignal(signal: AudioSignal): Promise<void>;
   onAudioSignal(fn: (s: AudioSignal) => void): () => void;
   readClipboard(): Promise<Omit<Note, "id">[]>;

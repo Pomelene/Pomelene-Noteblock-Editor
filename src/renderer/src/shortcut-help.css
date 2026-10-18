@@ -1,0 +1,54 @@
+.studio-dialog.shortcut-help-dialog {
+  box-sizing: border-box;
+  width: min(760px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  min-width: 0;
+}
+.shortcut-help {
+  width: 100%;
+  min-width: 0;
+  color: #cbd4d9;
+}
+.shortcut-help > p {
+  line-height: 1.6;
+  color: #aab6bf;
+  margin: 0 0 12px;
+}
+.shortcut-help > input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+}
+.shortcut-help-results {
+  max-height: 55vh;
+  overflow: auto;
+}
+.shortcut-help table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.shortcut-help th {
+  position: sticky;
+  top: 0;
+  background: #252e35;
+  color: #e5c08b;
+}
+.shortcut-help th,
+.shortcut-help td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #38424a;
+}
+.shortcut-help td:last-child {
+  font-size: 12px;
+  color: #aab6bf;
+}
+.shortcut-help kbd {
+  font-family: Consolas, monospace;
+  white-space: nowrap;
+  color: #e5e9ec;
+}
+.shortcut-help > button {
+  margin-top: 12px;
+}

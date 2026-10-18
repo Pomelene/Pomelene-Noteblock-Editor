@@ -30,6 +30,10 @@ describe.skipIf(!browserPath)(
     beforeAll(async () => {
       server = await createServer({
         configFile: false,
+        cacheDir: "node_modules/.vite-window-components",
+        optimizeDeps: {
+          include: ["react", "react-dom/client", "lucide-react"],
+        },
         plugins: [
           react(),
           {
@@ -53,9 +57,10 @@ describe.skipIf(!browserPath)(
           return React.createElement(React.Fragment,null,
             React.createElement('button',{id:'open-menu',onClick:()=>setMenu({x:990,y:750,items:[{label:'不可用',disabled:true},{label:'确认',action:()=>record('confirmed')},{label:'',separator:true},{label:'更多',children:[{label:'子命令',action:()=>record('child')}]}]})},'打开菜单'),
             React.createElement('button',{id:'restore',onClick:()=>setView(old=>({...old,state:'normal'}))},'还原窗口'),
+            React.createElement('button',{id:'playlist',onClick:()=>setView(old=>({...old,kind:'playlist'}))},'Playlist'),
             React.createElement('output',{id:'events'},events.join(',')),
             React.createElement('div',{id:'workspace',style:{position:'absolute',left:40,top:80,width:900,height:600}},
-              React.createElement(WindowFrame,{view,title:'测试 Pattern',active:true,onChange:change=>setView(old=>({...old,...change})),onFocus:()=>{},onClose:()=>record('close'),onPopout:()=>record('popout')},React.createElement('input',{id:'retained-value',defaultValue:'保留内容'}))),
+              React.createElement(WindowFrame,{view,className:view.kind==='playlist'?'arrangement-window':undefined,title:'测试 Pattern',active:true,onChange:change=>setView(old=>({...old,...change})),onFocus:()=>record('focus'),onClose:()=>record('close'),onPopout:()=>record('popout')},React.createElement('div',{className:'pattern-editor',tabIndex:0},React.createElement('input',{id:'retained-value',defaultValue:'保留内容'})))),
             React.createElement(ContextMenu,{menu,onClose:()=>setMenu(null)}));
         }
         createRoot(document.getElementById('root')).render(React.createElement(Harness));
@@ -88,6 +93,43 @@ describe.skipIf(!browserPath)(
     afterAll(async () => {
       await browser?.close();
       await server?.close();
+    });
+
+    it("composes a Playlist frame with shared layout and focuses its editor from its title and maximize control", async () => {
+      await page.locator("#retained-value").focus();
+      await page.locator("#playlist").click();
+      const frame = page.getByTestId("editor-window-one");
+      expect(await frame.getAttribute("data-kind")).toBe("playlist");
+      expect(await frame.locator(".studio-window-kind").textContent()).toBe(
+        "PL",
+      );
+      expect(await frame.locator(".playlist").count()).toBe(0);
+      expect(
+        (await frame.locator(".studio-window-kind").boundingBox())!.width,
+      ).toBeLessThan(30);
+      expect(await page.locator(".studio-window").count()).toBe(0);
+      expect(
+        await page.locator(".workspace-frame.arrangement-window").count(),
+      ).toBe(1);
+      expect(await frame.boundingBox()).toMatchObject({
+        x: 70,
+        y: 110,
+        width: 700,
+        height: 400,
+      });
+      await frame.locator(".studio-window-title").click();
+      expect(
+        await frame
+          .locator(".pattern-editor")
+          .evaluate((element) => document.activeElement === element),
+      ).toBe(true);
+      await frame.getByRole("button", { name: "最大化或还原" }).click();
+      expect(
+        await frame
+          .locator(".pattern-editor")
+          .evaluate((element) => document.activeElement === element),
+      ).toBe(true);
+      expect(await page.locator("#events").textContent()).toContain("focus");
     });
 
     it("uses captured pointer coordinates to resize and drag, then restores exact normal geometry", async () => {
@@ -125,7 +167,11 @@ describe.skipIf(!browserPath)(
       expect(await page.locator("#retained-value").inputValue()).toBe("已编辑");
       await window.getByRole("button", { name: "弹出桌面窗口" }).click();
       await window.getByRole("button", { name: "关闭窗口" }).click();
-      expect(await page.locator("#events").textContent()).toBe("popout,close");
+      expect(
+        (await page.locator("#events").textContent())!
+          .split(",")
+          .filter((value) => value !== "focus"),
+      ).toEqual(["popout", "close"]);
       expect(await window.boundingBox()).toEqual(rect);
     });
 

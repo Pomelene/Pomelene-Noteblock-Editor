@@ -621,6 +621,18 @@ svg {
   overflow: hidden;
   background: #20262b;
 }
+.arrangement-window .playlist > .panel-title {
+  display: none;
+}
+.arrangement-window .playlist {
+  min-height: 0;
+  flex: 1;
+}
+.native-content > .playlist {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
 .window-dock {
   height: 29px;
   display: flex;

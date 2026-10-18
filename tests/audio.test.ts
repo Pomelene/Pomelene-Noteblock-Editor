@@ -389,3 +389,42 @@ it("releases a closed transport owner so remaining windows can stop and play nor
   expect(two.audio.getState().tick).toBe(3);
   one.audio.stop();
 });
+it("transfers a docked paused transport to the main window and publishes its cursor to all editors", async () => {
+  setup();
+  const b = bus(),
+    main = engine(new FakeContext(), b.bridge("main")),
+    other = engine(new FakeContext(), b.bridge("other"));
+  await main.audio.adoptTransport(project(), {
+    status: "paused",
+    tick: 5.25,
+    scope: "song",
+  });
+  expect(main.audio.getState()).toMatchObject({
+    status: "paused",
+    tick: 5.25,
+    scope: "song",
+  });
+  expect(other.audio.getState()).toMatchObject({
+    status: "paused",
+    tick: 5.25,
+    scope: "song",
+  });
+  other.audio.stop();
+  expect(main.audio.getState()).toMatchObject({ status: "stopped", tick: 0 });
+});
+it("resumes a docked playing transport at its transferred cursor", async () => {
+  setup();
+  const { audio, context } = engine();
+  await audio.adoptTransport(project(), {
+    status: "playing",
+    tick: 4,
+    scope: "song",
+  });
+  expect(audio.getState()).toMatchObject({
+    status: "playing",
+    tick: 4,
+    scope: "song",
+  });
+  expect(context.sources[0].started[1]).toBeCloseTo(0.5);
+  audio.stop();
+});

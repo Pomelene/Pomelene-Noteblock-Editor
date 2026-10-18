@@ -28,11 +28,16 @@ export interface EditorView {
   z: number;
 }
 
+export interface FrameView extends Omit<EditorView, "kind"> {
+  kind: EditorView["kind"] | "playlist";
+}
+
 interface WindowFrameProps {
-  view: EditorView;
+  view: FrameView;
+  className?: string;
   title: string;
   active: boolean;
-  onChange: (change: Partial<EditorView>) => void;
+  onChange: (change: Partial<FrameView>) => void;
   onFocus: () => void;
   onClose: () => void;
   onPopout: () => void;
@@ -52,6 +57,7 @@ const edges: ResizeEdge[] = ["n", "e", "s", "w", "ne", "nw", "se", "sw"];
 
 export function WindowFrame({
   view,
+  className = "studio-window",
   title,
   active,
   onChange,
@@ -75,14 +81,26 @@ export function WindowFrame({
     return () => observer.disconnect();
   }, []);
 
+  const focusEditor = () => {
+    const editor = frame.current
+      ?.querySelector(".window-content")
+      ?.querySelector<HTMLElement>(
+        ".playlist, .pattern-editor, .phrase-preview, .sample-editor",
+      );
+    (editor ?? frame.current)?.focus({ preventScroll: true });
+  };
+
   const toggleMaximize = () => {
     onFocus();
+    focusEditor();
     onChange({ state: view.state === "maximized" ? "normal" : "maximized" });
   };
 
   const begin = (event: PointerEvent<HTMLElement>, edge?: ResizeEdge) => {
-    if (event.button !== 0 || view.state !== "normal") return;
+    if (event.button !== 0) return;
     if (!edge && (event.target as Element).closest("button")) return;
+    focusEditor();
+    if (view.state !== "normal") return;
     const element = frame.current;
     const parent = element?.parentElement;
     if (!element || !parent) return;
@@ -134,7 +152,8 @@ export function WindowFrame({
   return (
     <section
       ref={frame}
-      className={`studio-window${active ? " active" : ""}${view.state === "maximized" ? " maximized" : ""}`}
+      className={`workspace-frame ${className}${active ? " active" : ""}${view.state === "maximized" ? " maximized" : ""}`}
+      tabIndex={-1}
       style={{
         left: rect.x,
         top: rect.y,
@@ -150,9 +169,13 @@ export function WindowFrame({
       data-kind={view.kind}
       data-state={view.state}
       onPointerDownCapture={onFocus}
+      onFocusCapture={onFocus}
     >
       <header
         className="studio-window-titlebar"
+        onClick={(event) => {
+          if (!(event.target as Element).closest("button")) focusEditor();
+        }}
         onPointerDown={(event) => begin(event)}
         onPointerMove={move}
         onPointerUp={end}
@@ -164,8 +187,15 @@ export function WindowFrame({
           if (!(event.target as Element).closest("button")) toggleMaximize();
         }}
       >
-        <span className={`studio-window-kind ${view.kind}`} aria-hidden="true">
-          {view.kind === "pattern" ? "P" : "S"}
+        <span
+          className={`studio-window-kind ${view.kind === "playlist" ? "kind-playlist" : view.kind}`}
+          aria-hidden="true"
+        >
+          {view.kind === "playlist"
+            ? "PL"
+            : view.kind === "pattern"
+              ? "P"
+              : "S"}
         </span>
         <span className="studio-window-title">{title}</span>
         <div className="studio-window-actions">

@@ -34,6 +34,13 @@ import {
   type SnapId,
 } from "./snap";
 import { BrushStroke, captureGesture, segmentIntersectsRect } from "./gestures";
+import { resolveShortcut } from "./shortcuts";
+import {
+  instrumentChoices,
+  navigateInstrument,
+  noteOpacity,
+} from "./instrumentFocus";
+import "./pattern-focus.css";
 
 const L = 82,
   H = 26;
@@ -59,7 +66,8 @@ export function PatternEditor({
   stopped: number;
 }) {
   const scroller = useRef<HTMLDivElement>(null),
-    canvas = useRef<HTMLCanvasElement>(null);
+    canvas = useRef<HTMLCanvasElement>(null),
+    instrumentChoicesRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<"piano" | "layers">("piano"),
     [tool, setTool] = useState<"draw" | "brush" | "select" | "delete">("draw"),
     [zoom, setZoom] = useState(25),
@@ -68,10 +76,30 @@ export function PatternEditor({
   const [view, setView] = useState({ w: 800, h: 240, x: 0, y: 0 }),
     [ids, setIds] = useState<string[]>([]),
     [cursor, setCursor] = useState(0),
-    [instrument, setInstrument] = useState(0),
+    [instrument, setInstrument] = useState(project.instruments[0]?.id ?? 0),
+    [showAllInstruments, setShowAllInstruments] = useState(false),
     [velocity, setVelocity] = useState(85),
     [pitch, setPitch] = useState(66);
   const cancelGesture = useRef<(() => void) | null>(null);
+  const previousSnap = useRef<SnapId>("auto");
+  const choices = instrumentChoices(project.instruments, pattern.notes);
+  useEffect(() => {
+    const strip = instrumentChoicesRef.current;
+    const chip = strip?.querySelector<HTMLElement>(
+      `[data-instrument-id="${instrument}"]`,
+    );
+    if (!strip || !chip || !strip.clientWidth) return;
+    const bounds = strip.getBoundingClientRect(),
+      selectedBounds = chip.getBoundingClientRect();
+    if (selectedBounds.left < bounds.left + 8)
+      strip.scrollLeft -= bounds.left + 8 - selectedBounds.left;
+    else if (selectedBounds.right > bounds.right - 8)
+      strip.scrollLeft += selectedBounds.right - bounds.right + 8;
+  }, [instrument]);
+  useEffect(() => {
+    if (!project.instruments.some((i) => i.id === instrument))
+      setInstrument(project.instruments[0]?.id ?? 0);
+  }, [project.instruments, instrument]);
   const [erased, setErased] = useState<string[]>([]),
     [feedback, setFeedback] = useState("");
   const [ghost, setGhost] = useState<Note[]>([]),
@@ -234,7 +262,13 @@ export function PatternEditor({
         active = ids.includes(note.id),
         locked = pattern.layers[note.layer]?.locked,
         muted = pattern.layers[note.layer]?.muted;
-      ctx.globalAlpha = locked || muted ? 0.35 : 1;
+      ctx.globalAlpha = noteOpacity(
+        note.instrument,
+        instrument,
+        showAllInstruments,
+        active,
+        !!(locked || muted),
+      );
       ctx.fillStyle = active ? "#e1e6c9" : color;
       ctx.fillRect(x, y, w, rh - 4);
       ctx.fillStyle = active ? "#354338" : color + "70";
@@ -324,6 +358,8 @@ export function PatternEditor({
     layer,
     playTick,
     erased,
+    instrument,
+    showAllInstruments,
   ]);
   async function copy(cut = false) {
     try {
@@ -522,59 +558,157 @@ export function PatternEditor({
       data-testid="pattern-editor"
       tabIndex={0}
       onKeyDown={(e) => {
+        if (e.defaultPrevented) return;
         if (
-          e.defaultPrevented ||
-          (e.target as HTMLElement).matches("input,select,textarea")
-        )
+          e.key === "Escape" &&
+          !(e.target as HTMLElement).closest(
+            "input,select,textarea,[contenteditable=true]",
+          )
+        ) {
+          if (cancelGesture.current || ids.length) {
+            e.preventDefault();
+            e.stopPropagation();
+            cancelGesture.current?.();
+            setIds([]);
+          }
           return;
-        const key = e.key.toLowerCase(),
-          mod = e.ctrlKey || e.metaKey;
-        if (!mod && !e.altKey && ["p", "b", "e", "d"].includes(key)) {
-          e.preventDefault();
-          e.stopPropagation();
-          setTool(
-            ({ p: "draw", b: "brush", e: "select", d: "delete" } as const)[
-              key as "p" | "b" | "e" | "d"
-            ],
-          );
         }
-        if (e.key === "Escape") {
-          cancelGesture.current?.();
-          setIds([]);
-        }
-        if (mod && ["a", "c", "x", "v", "b"].includes(key)) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (key === "a") setIds(pattern.notes.map((n) => n.id));
-          if (key === "c" || key === "x") void copy(key === "x");
-          if (key === "v") void paste();
-          if (key === "b") duplicate();
-        }
-        if (ids.length && ["Delete", "Backspace"].includes(e.key)) {
-          e.preventDefault();
-          e.stopPropagation();
-          void run({ type: "notes:remove", patternId: pattern.id, ids });
-        }
-        if (ids.length && e.key.startsWith("Arrow")) {
-          e.preventDefault();
-          e.stopPropagation();
-          void run({
-            type: "notes:move",
-            patternId: pattern.id,
-            ids,
-            ticks:
-              e.key === "ArrowLeft" ? -unit : e.key === "ArrowRight" ? unit : 0,
-            pitches:
-              e.key === "ArrowUp"
-                ? e.shiftKey
-                  ? 12
-                  : 1
-                : e.key === "ArrowDown"
-                  ? e.shiftKey
-                    ? -12
-                    : -1
-                  : 0,
-          });
+        const action = resolveShortcut(e, "pattern");
+        if (!action) return;
+        e.preventDefault();
+        e.stopPropagation();
+        switch (action) {
+          case "tool:draw":
+            setTool("draw");
+            break;
+          case "tool:brush":
+            setTool("brush");
+            break;
+          case "tool:select":
+            setTool("select");
+            break;
+          case "tool:delete":
+            setTool("delete");
+            break;
+          case "selection:all":
+            setIds(pattern.notes.map((n) => n.id));
+            break;
+          case "selection:none":
+            setIds([]);
+            break;
+          case "selection:invert":
+            setIds(
+              pattern.notes.filter((n) => !ids.includes(n.id)).map((n) => n.id),
+            );
+            break;
+          case "edit:copy":
+            void copy();
+            break;
+          case "edit:cut":
+            void copy(true);
+            break;
+          case "edit:paste":
+            void paste();
+            break;
+          case "edit:duplicate":
+            duplicate();
+            break;
+          case "edit:delete":
+            if (ids.length)
+              void run({ type: "notes:remove", patternId: pattern.id, ids });
+            break;
+          case "move:left":
+          case "move:right":
+          case "move:up":
+          case "move:down":
+          case "move:octaveUp":
+          case "move:octaveDown":
+            if (ids.length)
+              void run({
+                type: "notes:move",
+                patternId: pattern.id,
+                ids,
+                ticks:
+                  action === "move:left"
+                    ? -unit
+                    : action === "move:right"
+                      ? unit
+                      : 0,
+                pitches:
+                  action === "move:up"
+                    ? 1
+                    : action === "move:down"
+                      ? -1
+                      : action === "move:octaveUp"
+                        ? 12
+                        : action === "move:octaveDown"
+                          ? -12
+                          : 0,
+              });
+            break;
+          case "seek:start":
+            setCursor(0);
+            seek(0);
+            break;
+          case "seek:end":
+            setCursor(pattern.length);
+            seek(pattern.length);
+            break;
+          case "zoom:in":
+            setZoom((v) => Math.min(64, v * 1.25));
+            break;
+          case "zoom:out":
+            setZoom((v) => Math.max(4, v / 1.25));
+            break;
+          case "zoom:1":
+            setZoom(4);
+            break;
+          case "zoom:2":
+            setZoom(11);
+            break;
+          case "zoom:3":
+            setZoom(24);
+            break;
+          case "zoom:4":
+            fit();
+            break;
+          case "zoom:selection": {
+            if (selected.length) {
+              const from = Math.min(...selected.map((n) => n.tick));
+              const to = Math.max(...selected.map((n) => n.tick + unit));
+              const nextZoom = Math.max(
+                4,
+                Math.min(64, (view.w - L - 24) / (to - from)),
+              );
+              setZoom(nextZoom);
+              if (scroller.current)
+                scroller.current.scrollLeft = from * nextZoom;
+            }
+            break;
+          }
+          case "snap:toggle":
+            if (snap === "none") setSnap(previousSnap.current);
+            else {
+              previousSnap.current = snap;
+              setSnap("none");
+            }
+            break;
+          case "instrument:previous":
+          case "instrument:next":
+          case "instrument:previousUsed":
+          case "instrument:nextUsed":
+            setInstrument(
+              navigateInstrument(
+                choices,
+                instrument,
+                action === "instrument:previous" ||
+                  action === "instrument:previousUsed"
+                  ? -1
+                  : 1,
+                action.endsWith("Used"),
+              ),
+            );
+            break;
         }
       }}
     >
@@ -717,97 +851,189 @@ export function PatternEditor({
           <Play size={14} />
         </button>
       </div>
-      <div className="instrument-strip" data-testid="instrument-strip">
-        <span
-          className="instrument-dot"
-          style={{ background: sample?.color }}
-        />
-        <label>
-          乐器
-          <select
-            aria-label="落笔音色"
-            value={instrument}
-            onChange={(e) => {
-              const id = +e.target.value;
-              setInstrument(id);
+      <section className="instrument-focus-panel" aria-label="音色焦点">
+        <div
+          className="instrument-strip instrument-focus-header"
+          data-testid="instrument-strip"
+        >
+          <span
+            className="instrument-dot"
+            style={{ background: sample?.color }}
+          />
+          <label>
+            当前落笔音色
+            <select
+              aria-label="落笔音色"
+              value={instrument}
+              onChange={(e) => {
+                setInstrument(+e.target.value);
+              }}
+            >
+              {project.instruments.map((i) => (
+                <option value={i.id} key={i.id}>
+                  {i.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="instrument-focus-count" aria-live="polite">
+            {choices.find((i) => i.id === instrument)?.count ?? 0} 音符
+          </span>
+          <button
+            title="预听当前音色"
+            aria-label="预听当前音色"
+            onClick={() =>
               void audio
-                .preview(project, id, pitch)
-                .catch((e) => report(e.message));
+                .preview(project, instrument, pitch, velocity)
+                .catch((e) => report(e.message))
+            }
+          >
+            <Volume2 size={14} />
+          </button>
+          <button
+            className="text-button"
+            onClick={() => {
+              if (ins) open({ kind: "sample", id: ins.sampleId });
             }}
           >
-            {project.instruments.map((i) => (
-              <option value={i.id} key={i.id}>
-                {i.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          title="预听当前音色"
-          aria-label="预听当前音色"
-          onClick={() =>
-            void audio
-              .preview(project, instrument, pitch, velocity)
-              .catch((e) => report(e.message))
-          }
-        >
-          <Volume2 size={14} />
-        </button>
-        <button
-          className="text-button"
-          onClick={() => {
-            if (ins) open({ kind: "sample", id: ins.sampleId });
+            采样设置
+          </button>
+          <span className="divider" />
+          <button
+            className="instrument-show-all"
+            aria-label="显示全部音色"
+            aria-pressed={showAllInstruments}
+            title="仅调整显示，不改变播放或导出"
+            onClick={() => setShowAllInstruments((v) => !v)}
+          >
+            <Layers size={14} />
+            {showAllInstruments ? "全部清晰" : "聚焦当前"}
+          </button>
+          <label>
+            落笔层
+            <select
+              aria-label="落笔图层"
+              value={layer}
+              onChange={(e) => setLayer(+e.target.value)}
+            >
+              {pattern.layers.map((l, i) => (
+                <option value={i} key={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            aria-label="新增图层"
+            title="新增图层"
+            onClick={() =>
+              void run({ type: "layer:add", patternId: pattern.id })
+            }
+          >
+            <Plus size={14} />
+          </button>
+          <span className="spacer" />
+          <label className="inline-value">
+            长度
+            <input
+              aria-label="Pattern 长度"
+              type="number"
+              min={0.25}
+              step={1}
+              key={pattern.id + ":" + pattern.length}
+              defaultValue={pattern.length}
+              onBlur={(e) => {
+                const length = +e.target.value;
+                if (length > 0 && length !== pattern.length)
+                  void run({
+                    type: "pattern:update",
+                    id: pattern.id,
+                    patch: { length },
+                  });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+            />
+          </label>
+        </div>
+        <div
+          className="instrument-choices"
+          ref={instrumentChoicesRef}
+          role="radiogroup"
+          aria-label="音色列表"
+          onKeyDown={(e) => {
+            if (
+              ![
+                "ArrowLeft",
+                "ArrowRight",
+                "ArrowUp",
+                "ArrowDown",
+                "Home",
+                "End",
+              ].includes(e.key) ||
+              e.ctrlKey ||
+              e.metaKey ||
+              e.altKey
+            )
+              return;
+            e.preventDefault();
+            e.stopPropagation();
+            const focused = (e.target as HTMLElement).closest<HTMLElement>(
+              "[data-instrument-id]",
+            )?.dataset.instrumentId;
+            const next =
+              e.key === "Home"
+                ? choices[0]?.id
+                : e.key === "End"
+                  ? choices.at(-1)?.id
+                  : navigateInstrument(
+                      choices,
+                      focused === undefined ? instrument : +focused,
+                      e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 1,
+                    );
+            if (next === undefined) return;
+            setInstrument(next);
+            e.currentTarget
+              .querySelector<HTMLButtonElement>(
+                `[data-instrument-id="${next}"]`,
+              )
+              ?.focus();
           }}
         >
-          采样设置
-        </button>
-        <span className="divider" />
-        <label>
-          落笔层
-          <select
-            aria-label="落笔图层"
-            value={layer}
-            onChange={(e) => setLayer(+e.target.value)}
-          >
-            {pattern.layers.map((l, i) => (
-              <option value={i} key={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          aria-label="新增图层"
-          title="新增图层"
-          onClick={() => void run({ type: "layer:add", patternId: pattern.id })}
-        >
-          <Plus size={14} />
-        </button>
-        <span className="spacer" />
-        <label className="inline-value">
-          长度
-          <input
-            aria-label="Pattern 长度"
-            type="number"
-            min={0.25}
-            step={1}
-            key={pattern.id + ":" + pattern.length}
-            defaultValue={pattern.length}
-            onBlur={(e) => {
-              const length = +e.target.value;
-              if (length > 0 && length !== pattern.length)
-                void run({
-                  type: "pattern:update",
-                  id: pattern.id,
-                  patch: { length },
-                });
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-          />
-        </label>
-      </div>
+          {choices.map((choice) => {
+            const def = project.instruments.find((i) => i.id === choice.id);
+            const color =
+              project.samples.find((s) => s.id === def?.sampleId)?.color ??
+              pattern.color;
+            return (
+              <button
+                key={choice.id}
+                type="button"
+                role="radio"
+                aria-label={`${choice.name} · ${choice.count} 音符`}
+                aria-checked={choice.id === instrument}
+                tabIndex={choice.id === instrument ? 0 : -1}
+                data-instrument-id={choice.id}
+                className={`instrument-chip${choice.id === instrument ? " current" : ""}${choice.count ? " used" : ""}`}
+                title={`${choice.name} · ${choice.count} 音符 · G/K 切换 · H/J 已使用音色`}
+                onClick={() => setInstrument(choice.id)}
+              >
+                <span
+                  className="instrument-chip-dot"
+                  style={{ background: color }}
+                  aria-hidden="true"
+                />
+                <span className="instrument-chip-name">{choice.name}</span>
+                <span className="instrument-chip-count">{choice.count}</span>
+                {choice.id === instrument && (
+                  <span className="instrument-chip-current">当前</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </section>
       <div className="pattern-body">
         <div
           className="note-scroll"
@@ -1320,6 +1546,16 @@ export function PatternEditor({
               aria-label={`力度 Tick ${n.tick} 图层 ${n.layer + 1}`}
               title={`${n.velocity}%`}
               style={{
+                opacity: noteOpacity(
+                  n.instrument,
+                  instrument,
+                  showAllInstruments,
+                  ids.includes(n.id),
+                  !!(
+                    pattern.layers[n.layer]?.locked ||
+                    pattern.layers[n.layer]?.muted
+                  ),
+                ),
                 left: n.tick * zoom - view.x,
                 height: Math.max(3, n.velocity * 0.42),
                 background:

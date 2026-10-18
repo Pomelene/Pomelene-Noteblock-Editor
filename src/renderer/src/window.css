@@ -1,4 +1,4 @@
-.studio-window {
+.workspace-frame {
   position: absolute;
   display: flex;
   flex-direction: column;
@@ -19,13 +19,13 @@
     0 12px 34px #0007,
     0 2px 6px #0005;
 }
-.studio-window.active {
+.workspace-frame.active {
   border-color: #748079;
   box-shadow:
     0 12px 36px #0009,
     0 0 0 1px #e1af7020;
 }
-.studio-window.maximized {
+.workspace-frame.maximized {
   border-radius: 0;
 }
 .studio-window-titlebar {
@@ -42,10 +42,10 @@
   touch-action: none;
   cursor: move;
 }
-.studio-window.active .studio-window-titlebar {
+.workspace-frame.active .studio-window-titlebar {
   box-shadow: inset 0 2px #e1af70;
 }
-.studio-window.maximized .studio-window-titlebar {
+.workspace-frame.maximized .studio-window-titlebar {
   cursor: default;
   border-radius: 0;
 }
@@ -63,6 +63,12 @@
 .studio-window-kind.sample {
   color: #c7c4e7;
   background: #6e699255;
+}
+.studio-window-kind.kind-playlist {
+  flex: 0 0 22px;
+  width: 22px;
+  color: #e1c495;
+  background: #896c3955;
 }
 .studio-window-title {
   overflow: hidden;
@@ -104,7 +110,7 @@
   color: #ffe3df;
   background: #a64642;
 }
-.studio-window > .window-content {
+.workspace-frame > .window-content {
   display: flex;
   flex: 1 1 0;
   flex-direction: column;

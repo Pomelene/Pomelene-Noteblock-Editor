@@ -33,6 +33,7 @@ import {
   segmentIntersectsRect,
 } from "./gestures";
 import { audio } from "./audio";
+import { isShortcutInput, resolveShortcut } from "./shortcuts";
 
 const LEFT = 160,
   TOP = 30,
@@ -48,6 +49,7 @@ export function Playlist({
   seek,
   stopped,
   report,
+  chooseSource,
 }: {
   project: Project;
   source: Source;
@@ -59,6 +61,7 @@ export function Playlist({
   seek: (n: number) => void;
   stopped: number;
   report: (s: string) => void;
+  chooseSource?: (source: Source) => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null),
     canvas = useRef<HTMLCanvasElement>(null);
@@ -70,6 +73,7 @@ export function Playlist({
     [cursor, setCursor] = useState(0),
     [clipboard, setClipboard] = useState<Omit<Clip, "id">[]>([]);
   const cancelGesture = useRef<(() => void) | null>(null);
+  const previousSnap = useRef<SnapId>("auto");
   const [erased, setErased] = useState<string[]>([]),
     [feedback, setFeedback] = useState("");
   const [ghost, setGhost] = useState<Clip[]>([]),
@@ -447,70 +451,126 @@ export function Playlist({
       })),
     });
   }
-  function fit() {
-    const end = Math.max(bar, ...project.clips.map((c) => c.tick + c.length));
-    setZoom(Math.max(4, Math.min(36, (view.w - LEFT - 24) / end)));
-    if (scroller.current) scroller.current.scrollLeft = 0;
+  function fit(chosen = project.clips) {
+    if (!chosen.length) return;
+    const start =
+      chosen === project.clips ? 0 : Math.min(...chosen.map((c) => c.tick));
+    const end = Math.max(start + bar, ...chosen.map((c) => c.tick + c.length));
+    const nextZoom = Math.max(
+      4,
+      Math.min(36, (view.w - LEFT - 24) / (end - start)),
+    );
+    setZoom(nextZoom);
+    if (scroller.current) scroller.current.scrollLeft = start * nextZoom;
   }
   return (
     <div
       className="playlist"
       tabIndex={0}
       onKeyDown={(e) => {
+        if (e.defaultPrevented || isShortcutInput(e.target)) return;
         if (
-          e.defaultPrevented ||
-          (e.target as HTMLElement).matches("input,select,textarea")
-        )
-          return;
-        const k = e.key.toLowerCase(),
-          mod = e.ctrlKey || e.metaKey;
-        if (!mod && !e.altKey && ["p", "b", "e", "d", "t", "s"].includes(k)) {
-          e.preventDefault();
-          setTool(
-            {
-              p: "draw",
-              b: "brush",
-              e: "select",
-              d: "delete",
-              t: "mute",
-              s: "slip",
-            }[k]!,
-          );
-        }
-        if (e.key === "Escape") {
+          e.key === "Escape" &&
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !e.altKey &&
+          !e.shiftKey &&
+          cancelGesture.current
+        ) {
           cancelGesture.current?.();
-          setIds([]);
-        }
-        if (mod && ["a", "c", "x", "v", "b"].includes(k)) {
           e.preventDefault();
           e.stopPropagation();
-          if (k === "a") setIds(project.clips.map((c) => c.id));
-          if (k === "c" || k === "x") void copy(k === "x");
-          if (k === "v") void paste();
-          if (k === "b" && selected.length) {
-            const start = Math.min(...selected.map((c) => c.tick)),
-              end = Math.max(...selected.map((c) => c.tick + c.length));
-            void run({
-              type: "clips:paste",
-              clips: selected.map(({ id, ...c }) => ({
-                ...c,
-                tick: c.tick + end - start,
-              })),
-            });
+          return;
+        }
+        const action = resolveShortcut(e, "playlist");
+        if (!action) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (action.startsWith("tool:")) {
+          setTool(action.slice(5) === "erase" ? "delete" : action.slice(5));
+          return;
+        }
+        switch (action) {
+          case "selection:all":
+            setIds(project.clips.map((c) => c.id));
+            break;
+          case "selection:none":
+            setIds([]);
+            break;
+          case "selection:invert":
+            setIds(
+              project.clips.filter((c) => !ids.includes(c.id)).map((c) => c.id),
+            );
+            break;
+          case "edit:copy":
+            void copy();
+            break;
+          case "edit:cut":
+            void copy(true);
+            break;
+          case "edit:paste":
+            void paste();
+            break;
+          case "edit:duplicate":
+            duplicate();
+            break;
+          case "edit:delete":
+            if (ids.length) void run({ type: "clips:remove", ids });
+            break;
+          case "snap:toggle":
+            if (snap === "none") setSnap(previousSnap.current);
+            else {
+              previousSnap.current = snap;
+              setSnap("none");
+            }
+            break;
+          case "seek:start":
+            setCursor(0);
+            seek(0);
+            if (scroller.current) scroller.current.scrollLeft = 0;
+            break;
+          case "seek:end": {
+            const end = Math.max(
+              0,
+              ...project.clips.map((c) => c.tick + c.length),
+            );
+            setCursor(end);
+            seek(end);
+            break;
           }
+          case "zoom:in":
+            setZoom((v) => Math.min(36, v + 3));
+            break;
+          case "zoom:out":
+            setZoom((v) => Math.max(4, v - 3));
+            break;
+          case "zoom:1":
+            setZoom(4);
+            break;
+          case "zoom:2":
+            setZoom(11);
+            break;
+          case "zoom:3":
+            setZoom(24);
+            break;
+          case "zoom:4":
+            fit();
+            break;
+          case "zoom:selection":
+            fit(selected);
+            break;
         }
-        if (ids.length && ["Delete", "Backspace"].includes(e.key)) {
-          e.preventDefault();
-          void run({ type: "clips:remove", ids });
-        }
-        if (ids.length && e.key.startsWith("Arrow")) {
-          e.preventDefault();
+        if (ids.length && action.startsWith("move:")) {
           void run({
             type: "clips:move",
             ids,
             ticks:
-              e.key === "ArrowRight" ? unit : e.key === "ArrowLeft" ? -unit : 0,
-            tracks: e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0,
+              action === "move:right"
+                ? unit
+                : action === "move:left"
+                  ? -unit
+                  : 0,
+            tracks: action === "move:down" ? 1 : action === "move:up" ? -1 : 0,
           });
         }
       }}
@@ -519,6 +579,7 @@ export function Playlist({
         <span className="tiny-accent" />
         <strong>Playlist</strong>
         <span className="subtle">编排</span>
+
         <span className="spacer" />
         <span className="small-mono">
           {project.clips.length} CLIPS · {project.tracks.length} TRACKS
@@ -575,6 +636,46 @@ export function Playlist({
             <MousePointer2 size={15} />
           </button>
         </div>
+        {chooseSource && (
+          <select
+            aria-label="放置来源"
+            title="当前放置来源"
+            style={{
+              width: 160,
+              maxWidth: 180,
+              minWidth: 120,
+              flexShrink: 0,
+              marginLeft: 4,
+            }}
+            value={`${source.kind}:${source.id}`}
+            onChange={(event) => {
+              const [kind, ...id] = event.target.value.split(":");
+              chooseSource({ kind: kind as Source["kind"], id: id.join(":") });
+            }}
+          >
+            <optgroup label="Pattern">
+              {project.patterns.map((item) => (
+                <option key={item.id} value={`pattern:${item.id}`}>
+                  {item.name}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="片段采样">
+              {(project.phrases ?? []).map((item) => (
+                <option key={item.id} value={`phrase:${item.id}`}>
+                  {item.name}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="音频">
+              {project.samples.map((item) => (
+                <option key={item.id} value={`sample:${item.id}`}>
+                  {item.name}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        )}
         <SnapPicker label="编排吸附" value={snap} onChange={setSnap} />
         <span className="divider" />
         <button
@@ -645,7 +746,11 @@ export function Playlist({
           </>
         )}
         <span className="spacer" />
-        <button aria-label="编排适应内容" title="缩放适应内容" onClick={fit}>
+        <button
+          aria-label="编排适应内容"
+          title="缩放适应内容 (Shift+4)"
+          onClick={() => fit()}
+        >
           <Scan size={14} />
         </button>
         <button

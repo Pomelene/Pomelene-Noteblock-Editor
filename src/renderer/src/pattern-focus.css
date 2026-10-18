@@ -1,0 +1,155 @@
+.instrument-focus-panel {
+  flex: 0 0 auto;
+  min-width: 0;
+  border-bottom: 1px solid #475661;
+  background: linear-gradient(110deg, #263943, #253039 65%);
+}
+.instrument-focus-panel .instrument-focus-header {
+  min-height: 42px;
+  height: auto;
+  flex-wrap: wrap;
+  gap: 7px;
+  border-bottom: 0;
+  background: transparent;
+}
+.instrument-focus-header > label:first-of-type {
+  color: #d5e5e8;
+  font-weight: 600;
+}
+.instrument-focus-header > label:first-of-type select {
+  max-width: 190px;
+  color: #e7f6ee;
+  border-color: #6b9e95;
+}
+.instrument-focus-count {
+  font-size: 11px;
+  color: #aec6ca;
+  white-space: nowrap;
+}
+.instrument-focus-header .instrument-show-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  width: auto;
+  color: #c1d6db;
+}
+.instrument-show-all[aria-pressed="true"] {
+  background: #3d555b;
+  color: #e1f1eb;
+}
+.instrument-choices {
+  display: flex;
+  overflow-x: auto;
+  gap: 6px;
+  padding: 2px 10px 9px;
+  scrollbar-width: thin;
+}
+.instrument-choices .instrument-chip {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 7px;
+  min-height: 31px;
+  max-width: 220px;
+  padding: 5px 9px;
+  color: #b4c3cc;
+  background: #202b33;
+  border: 1px solid #46545f;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.instrument-choices .instrument-chip:hover {
+  background: #34454f;
+  color: #f0f5f7;
+}
+.instrument-choices .instrument-chip.current {
+  border-color: #9acabd;
+  background: #3b5b59;
+  color: #f1fbf5;
+  box-shadow: inset 0 0 0 1px #88b7a933;
+}
+.instrument-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.instrument-chip-dot {
+  flex: 0 0 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.instrument-chip-count {
+  min-width: 16px;
+  text-align: center;
+  border-radius: 4px;
+  background: #ffffff0d;
+  color: #a9bdc6;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.instrument-chip.used .instrument-chip-count {
+  color: #d4e2e7;
+}
+.instrument-chip-current {
+  font-size: 10px;
+  font-weight: 600;
+  color: #d6f0da;
+}
+.instrument-focus-panel button:focus-visible,
+.instrument-focus-panel select:focus-visible {
+  outline: 2px solid #e7c78d;
+  outline-offset: 2px;
+}
+.instrument-choices .instrument-chip:focus-visible {
+  scroll-margin-inline: 12px;
+}
+.pattern-editor {
+  container-type: size;
+  container-name: pattern-editor;
+}
+
+@container pattern-editor (height < 280px) {
+  .instrument-focus-panel .instrument-choices {
+    display: none;
+  }
+  .instrument-focus-panel .instrument-focus-header {
+    height: 42px;
+    min-height: 42px;
+    max-height: 42px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+  .instrument-focus-header > * {
+    flex-shrink: 0;
+  }
+  .pattern-editor .pattern-body {
+    min-height: 30px;
+  }
+  .pattern-editor .note-inspector {
+    overflow-y: auto;
+  }
+  .pattern-editor .velocity-lane {
+    flex: 0 0 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+  .pattern-editor .velocity-label {
+    padding-top: 5px;
+    padding-bottom: 3px;
+  }
+  .pattern-editor .canvas-footer {
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    gap: 12px;
+    scrollbar-width: thin;
+  }
+  .canvas-footer > span {
+    flex-shrink: 0;
+  }
+}
