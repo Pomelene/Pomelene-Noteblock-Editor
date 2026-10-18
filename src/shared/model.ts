@@ -47,6 +47,8 @@ export interface Instrument {
   sampleId: string;
   key: number;
   pressKey: boolean;
+  /** Optional playback/export substitute; source identity and tuning stay intact. */
+  mappingTargetId?: number;
 }
 export interface Track {
   id: string;
@@ -129,6 +131,7 @@ export interface Snapshot {
   document: { path?: string; dirty: boolean };
 }
 export type Command =
+  | { type: "instrument:map"; id: number; targetId?: number }
   | { type: "import:restoreOriginal" }
   | { type: "phrase:fromPattern"; patternId: string; name?: string }
   | { type: "phrase:fromClips"; ids: string[]; name?: string }

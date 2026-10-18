@@ -152,8 +152,19 @@ export function organizeImportedProject(
   const lanes = extractLanes(input, pattern);
   if (lanes.length > profile.maxLanes)
     return fallback("图层/乐器 lane 数超过分析预算；已保留原布局。");
-  const groups = groupLanes(lanes, profile);
+  const groups = groupLanes(lanes, {
+    ...profile,
+    maxGroups: Math.min(
+      profile.maxGroups,
+      profile.maxPatterns,
+      profile.maxClips,
+    ),
+  });
   if (!groups) return fallback("声部分组数超过轨道预算；已保留原布局。");
+  if (groups.some((g) => g.packed))
+    summary.warnings.push(
+      "声部超过轨道预算，已将相近声部放入同轨；原始图层与全部音符保持独立。",
+    );
   if (!groups.length) {
     if (
       original.patterns > profile.maxPatterns ||
@@ -170,6 +181,37 @@ export function organizeImportedProject(
   }
   const patterns: Pattern[] = [],
     clips: Clip[] = [];
+  const segments = groups.map((group) =>
+    segmentGroup(group, pattern.length, barTicks, profile),
+  );
+  const segmentCount = segments.reduce((sum, list) => sum + list.length, 0);
+  const outputBudget = Math.min(profile.maxPatterns, profile.maxClips);
+  if (segmentCount > outputBudget) {
+    // Reserve one reference per remaining voice, then distribute spare capacity.
+    // Coarsen contiguous phrases, preserving timing and silence between them.
+    let remaining = outputBudget;
+    let pending = segmentCount;
+    for (let i = 0; i < segments.length; i++) {
+      const list = segments[i];
+      const quota = Math.min(
+        list.length,
+        remaining - (segments.length - i - 1),
+        Math.max(1, Math.floor((remaining * list.length) / pending)),
+      );
+      const merged = [];
+      for (let j = 0; j < quota; j++) {
+        const start = Math.floor((j * list.length) / quota);
+        const end = Math.floor(((j + 1) * list.length) / quota) - 1;
+        merged.push({ start: list[start].start, end: list[end].end });
+      }
+      remaining -= quota;
+      pending -= list.length;
+      segments[i] = merged;
+    }
+    summary.warnings.push(
+      "已按工程容量合并相邻乐句；全部原始音符与时间位置保持不变。",
+    );
+  }
   const sourceTrack = input.tracks[clip.track];
   const tracks = groups.map((group, index) => ({
     ...sourceTrack,
@@ -178,24 +220,12 @@ export function organizeImportedProject(
     color: pattern.color,
   }));
   for (const [groupIndex, group] of groups.entries()) {
-    const layers = group.sourceLayers.map((index) => ({
-      ...pattern.layers[index],
-      sourceIndex: pattern.layers[index].sourceIndex ?? index,
-    }));
-    const layerIndices = new Map(
-      group.sourceLayers.map((source, index) => [source, index]),
-    );
     // Hashes only select a bucket. Full signature equality authorizes reuse.
     const shared = new Map<number, { signature: string; pattern: Pattern }[]>();
     let cursor = 0,
       patternCount = 0,
       clipCount = 0;
-    for (const segment of segmentGroup(
-      group,
-      pattern.length,
-      barTicks,
-      profile,
-    )) {
+    for (const segment of segments[groupIndex]) {
       while (
         cursor < group.notes.length &&
         group.notes[cursor].tick < segment.start
@@ -211,6 +241,18 @@ export function organizeImportedProject(
       const length = segment.end - segment.start;
       if (length < 1 / 1024)
         return fallback("分段后乐句长度低于工程格式精度；已保留原布局。");
+      // A phrase owns only layers it actually uses. Cloning every voice layer
+      // into every phrase can turn a small import into an unsavable project.
+      const sourceLayers = [...new Set(sourceNotes.map((n) => n.layer))].sort(
+        (a, b) => a - b,
+      );
+      const layers = sourceLayers.map((index) => ({
+        ...pattern.layers[index],
+        sourceIndex: pattern.layers[index].sourceIndex ?? index,
+      }));
+      const layerIndices = new Map(
+        sourceLayers.map((source, index) => [source, index]),
+      );
       const signature = JSON.stringify([
         length,
         layers.map((l) => [l.sourceIndex, ...layerTuple(l)]),

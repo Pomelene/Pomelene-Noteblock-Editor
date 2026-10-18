@@ -7,6 +7,7 @@ export interface LayerGroup {
   lanes: Lane[];
   sourceLayers: number[];
   notes: Note[];
+  packed?: boolean;
 }
 
 function chordEvidence(
@@ -47,14 +48,27 @@ export function groupLanes(
       return chordEvidence(representative, lane, profile);
     });
     if (!group) {
-      if (groups.length >= profile.maxGroups) return undefined;
-      group = {
-        name: lane.authoredName?.slice(0, 128) ?? `声部 ${groups.length + 1}`,
-        lanes: [],
-        sourceLayers: [],
-        notes: [],
-      };
-      groups.push(group);
+      if (!profile.maxGroups) return undefined;
+      if (groups.length >= profile.maxGroups) {
+        // Output capacity is a layout constraint, never permission to drop notes.
+        // Prefer a compatible timbre/register; all source layers remain independent.
+        group = groups.reduce((best, candidate) => {
+          const score = (g: LayerGroup) =>
+            (g.lanes[0].instrument === lane.instrument ? 0 : 256) +
+            Math.abs(g.lanes[0].medianPitch - lane.medianPitch) +
+            g.lanes.length / 1024;
+          return score(candidate) < score(best) ? candidate : best;
+        });
+        group.packed = true;
+      } else {
+        group = {
+          name: lane.authoredName?.slice(0, 128) ?? `声部 ${groups.length + 1}`,
+          lanes: [],
+          sourceLayers: [],
+          notes: [],
+        };
+        groups.push(group);
+      }
     }
     group.lanes.push(lane);
     if (!group.sourceLayers.includes(lane.sourceLayer))

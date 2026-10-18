@@ -1,6 +1,6 @@
 {
   "name": "note-block-editor",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Pattern-based desktop editor for Note Block Songs",
   "private": true,
   "type": "module",

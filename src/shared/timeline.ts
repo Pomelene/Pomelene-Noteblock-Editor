@@ -53,8 +53,12 @@ export function noteEvent(
 ): AudioEvent {
   const instrument = project.instruments.find((i) => i.id === note.instrument);
   if (!instrument) throw new Error(`Missing instrument: ${note.instrument}`);
-  const event = sampleEvent(project, instrument.sampleId);
-  const sample = project.samples.find((s) => s.id === instrument.sampleId)!;
+  const target =
+    instrument.mappingTargetId === undefined
+      ? instrument
+      : project.instruments.find((i) => i.id === instrument.mappingTargetId)!;
+  const event = sampleEvent(project, target.sampleId);
+  const sample = project.samples.find((s) => s.id === target.sampleId)!;
   // NBS calculations and OpenNBS toggle_playing/play_sound: layer center keeps
   // note pan; other layers average it. Custom instrument key ADDS key - 45.
   const notePan = note.panning ?? 100;

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Play, Volume2, FileAudio, Music2 } from "lucide-react";
 import { audio } from "./audio";
 import { pitchName, type Project, type Sample } from "../../shared/model";
 import type { Run } from "./ui";
+import { InstrumentMappingControls } from "./InstrumentManager";
 export function SampleEditor({
   project,
   sample,
@@ -203,7 +204,7 @@ export function SampleEditor({
           </span>
         </div>
         {used.map((i) => (
-          <div className="instrument-setting" key={i.id}>
+          <Fragment key={i.id}><div className="instrument-setting">
             <span>{i.name}</span>
             <label>
               NBS 调音
@@ -243,6 +244,8 @@ export function SampleEditor({
               <Volume2 size={15} />
             </button>
           </div>
+          {(i.id >= 16 || i.mappingTargetId !== undefined || (!sample.builtin && !sample.dataUrl)) && <InstrumentMappingControls project={project} instrument={i} run={run} report={report} />}
+          </Fragment>
         ))}
         {!used.length && (
           <p className="subtle">

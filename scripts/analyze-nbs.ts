@@ -1,8 +1,8 @@
 import { readdir, readFile, mkdir, writeFile } from "node:fs/promises";
-import { resolve, join, extname, basename } from "node:path";
+import { resolve, join, extname, basename, relative, dirname } from "node:path";
 import { performance } from "node:perf_hooks";
 import { isDeepStrictEqual } from "node:util";
-import { fromNbs, toNbs } from "../src/shared/io";
+import { encodeProject, fromNbs, toNbs } from "../src/shared/io";
 import {
   organizeImportedProject,
   collectMusicalEvents,
@@ -10,7 +10,11 @@ import {
 import { buildEvents } from "../src/shared/timeline";
 import type { Project } from "../src/shared/model";
 const corpus = process.argv[2];
-if (!corpus) throw Error("Usage: node scripts/analyze-nbs.cjs <folder>");
+if (!corpus)
+  throw Error("Usage: node scripts/analyze-nbs.cjs <folder> [output.json]");
+const output = resolve(
+  process.argv[3] ?? "test-results/smart-pattern-corpus.json",
+);
 const result: unknown[] = [];
 function audible(project: Project) {
   const copy = structuredClone(project);
@@ -25,13 +29,28 @@ function audible(project: Project) {
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   };
 }
-for (const entry of (await readdir(corpus, { withFileTypes: true }))
+for (const entry of (
+  await readdir(corpus, { withFileTypes: true, recursive: true })
+)
   .filter((e) => e.isFile() && extname(e.name).toLowerCase() === ".nbs")
-  .sort((a, b) => a.name.localeCompare(b.name))) {
+  .sort((a, b) =>
+    join(a.parentPath, a.name).localeCompare(join(b.parentPath, b.name)),
+  )) {
+  const file = relative(corpus, join(entry.parentPath, entry.name));
   const started = performance.now();
   try {
-    const original = fromNbs(await readFile(join(corpus, entry.name))),
-      out = organizeImportedProject(original);
+    const original = fromNbs(
+        await readFile(join(entry.parentPath, entry.name)),
+      ),
+      organizing = performance.now(),
+      out = organizeImportedProject(original),
+      organizeMilliseconds = Math.round(performance.now() - organizing);
+    let sessionError = "", projectBytes = 0;
+    try {
+      projectBytes = encodeProject(out.project).byteLength;
+    } catch (e) {
+      sessionError = String(e);
+    }
     const preserved = isDeepStrictEqual(
       collectMusicalEvents(original),
       collectMusicalEvents(out.project),
@@ -57,8 +76,14 @@ for (const entry of (await readdir(corpus, { withFileTypes: true }))
       exportError = String(e);
     }
     const row = {
-      file: entry.name,
+      file,
       milliseconds: Math.round(performance.now() - started),
+      organizeMilliseconds,
+      backupBytes: out.project.importOrganization
+        ? Buffer.byteLength(out.project.importOrganization.originalData)
+        : 0,
+      sessionError,
+      projectBytes,
       notes: out.summary.noteCount,
       groups: out.summary.proposed.tracks,
       patterns: out.summary.proposed.patterns,
@@ -74,18 +99,24 @@ for (const entry of (await readdir(corpus, { withFileTypes: true }))
     };
     result.push(row);
     console.log(JSON.stringify(row));
-    if (!preserved || !audioPreserved || !exportable || !exportPreserved)
+    if (
+      !preserved ||
+      !audioPreserved ||
+      !exportable ||
+      !exportPreserved ||
+      sessionError
+    )
       process.exitCode = 1;
   } catch (e) {
-    const row = { file: entry.name, error: String(e) };
+    const row = { file, error: String(e) };
     result.push(row);
     console.log(JSON.stringify(row));
     process.exitCode = 1;
   }
 }
-await mkdir(resolve("test-results"), { recursive: true });
+await mkdir(dirname(output), { recursive: true });
 await writeFile(
-  resolve("test-results/smart-pattern-corpus.json"),
+  output,
   JSON.stringify(
     {
       source: basename(resolve(corpus)),

@@ -1,7 +1,7 @@
 appId: studio.noteblock.editor
 productName: NoteBlock Editor
 directories:
-  output: ../deliverables/NoteBlockEditor-0.6.1
+  output: ../deliverables/NoteBlockEditor-0.7.0
 artifactName: NoteBlockEditor-${version}-windows-${arch}.${ext}
 files:
   - out/**/*

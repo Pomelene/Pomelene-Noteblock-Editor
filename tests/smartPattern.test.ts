@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Layer, Note, Project } from "../src/shared/model";
 import { buildEvents } from "../src/shared/timeline";
-import { validateProject } from "../src/shared/session";
+import { newLayer, validateProject } from "../src/shared/session";
+import { encodeProject, fromNbs, toNbs } from "../src/shared/io";
 import {
   collectMusicalEvents,
   organizeImportedProject,
@@ -115,6 +116,58 @@ function assertPreserved(before: Project, after: Project) {
 }
 
 describe("smart NBS structure", () => {
+  it("keeps a many-layer authored family savable by retaining only each phrase's used layers", () => {
+    const input = song(
+      Array.from({ length: 6400 }, (_, i) => note(i, 60, {
+        layer: i % 1200,
+        finePitch: i,
+      })),
+      6400,
+      Array.from({ length: 1200 }, (_, i) => ({ ...newLayer(i), name: `Orchestra ${i}` })),
+    );
+    input.meter = "1/16";
+    expect(() => encodeProject(input)).not.toThrow();
+    const { project, summary } = organizeImportedProject(input);
+    expect(summary.applicable).toBe(true);
+    expect(() => encodeProject(project)).not.toThrow();
+    expect(project.patterns.every((p) => p.layers.length <= p.notes.length)).toBe(true);
+    assertPreserved(input, project);
+    // NBS cannot encode 1/16; compare the unchanged trigger timeline through
+    // the same supported meter on both sides of the format conversion.
+    expect(collectMusicalEvents(fromNbs(toNbs({ ...project, meter: "4/4" }).data))).toEqual(
+      collectMusicalEvents(fromNbs(toNbs({ ...input, meter: "4/4" }).data)),
+    );
+  });
+
+  it("organizes ninety-six authored voices without discarding their source identities", () => {
+    const input = song(Array.from({ length: 96 }, (_, i) => note(i, 30 + i % 60, { layer: i })), 128,
+      Array.from({ length: 96 }, (_, i) => layer(`Part ${String.fromCharCode(65 + i)} voice`)));
+    const { project, summary } = organizeImportedProject(input);
+    expect(summary.applicable).toBe(true);
+    expect(summary.groups.length).toBeGreaterThan(64);
+    expect(() => validateProject(project)).not.toThrow();
+    assertPreserved(input, project);
+  });
+
+  it.each(["authored", "generic"])("packs excess %s voices into bounded tracks without dropping a note", (naming) => {
+    const input = song(Array.from({ length: 12 }, (_, i) => note(i, 30 + i * 3, { layer: i })), 32,
+      Array.from({ length: 12 }, (_, i) => layer(naming === "authored" ? `Voice ${String.fromCharCode(65 + i)}` : `Layer ${i + 1}`)));
+    const { project, summary } = organizeImportedProject(input, { maxGroups: 4 });
+    expect(summary.applicable).toBe(true);
+    expect(project.tracks).toHaveLength(4);
+    expect(summary.warnings.length).toBeGreaterThan(0);
+    assertPreserved(input, project);
+  });
+
+  it("coarsens phrases to fit a small pattern and clip budget instead of reverting the entire song", () => {
+    const input = song(Array.from({ length: 64 }, (_, bar) => note(bar * 16, 30 + bar)), 1024);
+    const { project, summary } = organizeImportedProject(input, { maxPatterns: 2, maxClips: 2 });
+    expect(summary.applicable).toBe(true);
+    expect(project.patterns.length).toBeLessThanOrEqual(2);
+    expect(project.clips.length).toBeLessThanOrEqual(2);
+    assertPreserved(input, project);
+  });
+
   it("reports a canonical trigger with source identity and every raw expressive/layer property", () => {
     const input = song(
       [

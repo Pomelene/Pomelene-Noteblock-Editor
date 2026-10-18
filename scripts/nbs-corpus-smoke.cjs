@@ -4,6 +4,7 @@ const fs = require("node:fs"),
   assert = require("node:assert/strict");
 const version = require("../package.json").version,
   packaged = process.argv.includes("--packaged");
+const smart = process.argv.includes("--smart");
 const corpus = process.argv.find((x) => x.startsWith("--corpus="))?.slice(9);
 if (!corpus) throw Error("Provide --corpus=<NBS folder>");
 function walk(folder) {
@@ -51,10 +52,16 @@ const errors = [],
       };
     });
     await page.waitForSelector(".studio");
-    await page.evaluate(() =>
-      window.studio.onImportPrompt((p) => {
-        if (p) void window.studio.respondImport(p.id, "original");
-      }),
+    await page.evaluate(
+      (smart) =>
+        window.studio.onImportPrompt((p) => {
+          if (p)
+            void window.studio.respondImport(
+              p.id,
+              smart && p.summary.applicable ? "smart" : "original",
+            );
+        }),
+      smart,
     );
     let largest;
     for (const file of walk(corpus)) {
@@ -69,6 +76,10 @@ const errors = [],
           ),
           warnings: result.warnings.length,
           title: result.snapshot.project.title,
+          organized: !!result.snapshot.project.importOrganization,
+          tracks: result.snapshot.project.tracks.length,
+          sourceNotes:
+            result.snapshot.project.importOrganization?.summary.noteCount,
         };
       });
       assert.equal(result.ok, true);
@@ -126,6 +137,7 @@ const errors = [],
     const result = {
       version,
       packaged,
+      smart,
       files: rows.length,
       imported: rows.length,
       largest: largest.notes,
@@ -135,7 +147,7 @@ const errors = [],
     };
     fs.writeFileSync(
       path.resolve(
-        `test-results/nbs-desktop-${packaged ? "packaged" : "source"}.json`,
+        `test-results/nbs-desktop-${packaged ? "packaged" : "source"}${smart ? "-smart" : ""}.json`,
       ),
       JSON.stringify(result, null, 2),
     );

@@ -306,6 +306,24 @@ export function validateProject(value: unknown): Project {
     if (!samples.has(str(i.sampleId, 128))) fail("乐器引用的采样不存在");
     num(i.key, 0, 255, true);
     bool(i.pressKey);
+    if (i.mappingTargetId !== undefined) num(i.mappingTargetId, 0, 255, true);
+  }
+  for (const raw of p.instruments as Project["instruments"]) {
+    if (raw.mappingTargetId === undefined) continue;
+    const target = (p.instruments as Project["instruments"]).find(
+      (i) => i.id === raw.mappingTargetId,
+    );
+    const sample = (p.samples as Project["samples"]).find(
+      (s) => s.id === target?.sampleId,
+    );
+    if (
+      !target ||
+      target.id === raw.id ||
+      target.mappingTargetId !== undefined ||
+      !sample ||
+      (!sample.builtin && !sample.dataUrl)
+    )
+      fail("映射目标必须是有可用音频且未被映射的现有乐器，不能形成循环");
   }
   let notes = 0;
   const patternArray = arr(p.patterns, 1024),
@@ -403,7 +421,7 @@ export function validateProject(value: unknown): Project {
     str(s.algorithmVersion, 128);
     if (s.algorithmVersion !== info.version) fail("智能整理版本信息不一致");
     bool(s.applicable);
-    num(s.noteCount, 0, 100000, true);
+    num(s.noteCount, 0, 1_000_000, true);
     num(s.layerCount, 0, 4096, true);
     num(s.durationTicks, 0, MAX_TICK);
     num(s.bpm, 0.15, 9830.25);
@@ -415,11 +433,11 @@ export function validateProject(value: unknown): Project {
       num(counts.tracks, 0, 256, true);
     }
     num(obj(s.proposed).reusedClips, 0, 10000, true);
-    for (const raw of arr(s.groups, 64)) {
+    for (const raw of arr(s.groups, 256)) {
       const g = obj(raw);
       str(g.name, 4096);
       arr(g.sourceLayers, 4096).forEach((n) => num(n, 0, 4095, true));
-      num(g.noteCount, 0, 100000, true);
+      num(g.noteCount, 0, 1_000_000, true);
       num(g.patternCount, 0, 1024, true);
       num(g.clipCount, 0, 10000, true);
     }
@@ -808,6 +826,12 @@ export class Session {
         case "instrument:update":
           Object.assign(find(p.instruments, command.id), command.patch);
           break;
+        case "instrument:map": {
+          const instrument = find(p.instruments, command.id);
+          if (command.targetId === undefined) delete instrument.mappingTargetId;
+          else instrument.mappingTargetId = command.targetId;
+          break;
+        }
         case "track:add":
           p.tracks.push({
             id: uid(),

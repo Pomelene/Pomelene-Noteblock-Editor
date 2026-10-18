@@ -34,10 +34,11 @@ import {
 } from "./gestures";
 import { audio } from "./audio";
 import { isShortcutInput, resolveShortcut } from "./shortcuts";
+import { useEditorWheelZoom, useEditorRowHeight } from "./useEditorViewport";
+import "./editor-viewport.css";
 
 const LEFT = 160,
-  TOP = 30,
-  ROW = 64;
+  TOP = 30;
 export function Playlist({
   project,
   source,
@@ -69,10 +70,27 @@ export function Playlist({
     [zoom, setZoom] = useState(11),
     [snap, setSnap] = useState<SnapId>("auto"),
     [tool, setTool] = useState("draw");
+  const [ROW, setRowHeight] = useState(64);
   const [ids, setIds] = useState<string[]>([]),
     [cursor, setCursor] = useState(0),
     [clipboard, setClipboard] = useState<Omit<Clip, "id">[]>([]);
   const cancelGesture = useRef<(() => void) | null>(null);
+  const updateScroll = (x: number, y: number) =>
+    setView((v) => ({ ...v, x, y }));
+  useEditorWheelZoom({
+    scroller,
+    zoom,
+    min: 4,
+    max: 36,
+    gutter: LEFT,
+    setZoom,
+    cancelGesture,
+    onScroll: updateScroll,
+  });
+  useEditorRowHeight(scroller, ROW, view.y, updateScroll);
+  useEffect(() => {
+    cancelGesture.current?.();
+  }, [zoom, ROW]);
   const previousSnap = useRef<SnapId>("auto");
   const [erased, setErased] = useState<string[]>([]),
     [feedback, setFeedback] = useState("");
@@ -220,7 +238,7 @@ export function Playlist({
       ctx.fillStyle = color + "35";
       ctx.fillRect(x + 1, y, Math.max(3, w), h);
       ctx.fillStyle = color;
-      ctx.fillRect(x + 1, y, Math.max(3, w), 17);
+      ctx.fillRect(x + 1, y, Math.max(3, w), Math.min(17, h));
       ctx.strokeStyle = active ? "#f1e3cc" : color + "95";
       ctx.lineWidth = active ? 2 : 1;
       ctx.strokeRect(x + 1.5, y + 0.5, Math.max(3, w), h - 1);
@@ -229,7 +247,7 @@ export function Playlist({
       ctx.fillText(
         (c.kind === "sample" ? "≋  " : "▤  ") + info.name,
         Math.max(LEFT + 5, x + 7),
-        y + 9,
+        y + Math.min(9, h / 2),
         Math.max(1, w - 12),
       );
       if (c.kind !== "sample") {
@@ -238,7 +256,7 @@ export function Playlist({
             ? project.phrases!.find((p) => p.id === c.sourceId)!
             : project.patterns.find((p) => p.id === c.sourceId)!;
         ctx.fillStyle = color;
-        for (const n of pattern.notes) {
+        for (const n of h >= 28 ? pattern.notes : []) {
           if (
             n.tick < c.offset ||
             n.tick >= Math.min(pattern.length, c.offset + c.length)
@@ -248,12 +266,12 @@ export function Playlist({
           if (nx < LEFT || nx > view.w) continue;
           ctx.fillRect(
             nx,
-            y + 22 + ((96 - n.pitch) / 72) * 23,
+            y + 22 + ((96 - n.pitch) / 72) * Math.max(0, h - 33),
             Math.max(2, Math.min(zoom - 2, 12)),
             2,
           );
         }
-        if (c.length + c.offset > pattern.length) {
+        if (h >= 28 && c.length + c.offset > pattern.length) {
           const emptyX = x + Math.max(0, pattern.length - c.offset) * zoom;
           ctx.fillStyle = "#12191e55";
           ctx.fillRect(
@@ -265,7 +283,7 @@ export function Playlist({
         }
       } else {
         const wave = waveforms[c.sourceId];
-        if (wave) {
+        if (wave && h >= 28) {
           const totalTicks = ((wave.duration * project.bpm) / 60) * 4;
           ctx.strokeStyle = color + "bb";
           ctx.beginPath();
@@ -282,9 +300,9 @@ export function Playlist({
                   wave.peaks.length - 1,
                   Math.floor((sampleTick / totalTicks) * wave.peaks.length),
                 )
-              ] ?? 0) * 14;
-            ctx.moveTo(x + px, y + 37 - amp);
-            ctx.lineTo(x + px, y + 37 + amp);
+              ] ?? 0) * Math.max(0, (h - 28) / 2);
+            ctx.moveTo(x + px, y + 18 + (h - 18) / 2 - amp);
+            ctx.lineTo(x + px, y + 18 + (h - 18) / 2 + amp);
           }
           ctx.stroke();
         }
@@ -329,17 +347,20 @@ export function Playlist({
       ctx.fillStyle = track.color;
       ctx.fillRect(0, y + 6, 3, ROW - 13);
       ctx.fillStyle = "#637078";
-      ctx.fillText(String(i + 1).padStart(2, "0"), 10, y + 18);
+      const labelY = ROW < 52 ? ROW / 2 : 18;
+      ctx.fillText(String(i + 1).padStart(2, "0"), 10, y + labelY);
       ctx.fillStyle = "#d0d8dc";
-      ctx.fillText(track.name, 33, y + 18, LEFT - 42);
-      ctx.fillStyle = track.muted ? "#695a52" : "#8eb99d";
-      ctx.fillRect(13, y + 39, 7, 7);
-      ctx.fillStyle = track.solo ? "#e6b675" : "#77848c";
-      ctx.fillText(
-        track.solo ? "S 独奏" : track.locked ? "已锁定" : "音符 / 素材",
-        31,
-        y + 43,
-      );
+      ctx.fillText(track.name, 33, y + labelY, LEFT - 42);
+      if (ROW >= 52) {
+        ctx.fillStyle = track.muted ? "#695a52" : "#8eb99d";
+        ctx.fillRect(13, y + 39, 7, 7);
+        ctx.fillStyle = track.solo ? "#e6b675" : "#77848c";
+        ctx.fillText(
+          track.solo ? "S 独奏" : track.locked ? "已锁定" : "音符 / 素材",
+          31,
+          y + 43,
+        );
+      }
     });
     ctx.restore();
     ctx.fillStyle = "#2a3238";
@@ -356,7 +377,19 @@ export function Playlist({
       ctx.lineTo(x, 7);
       ctx.fill();
     }
-  }, [project, view, zoom, snap, tick, ids, ghost, box, waveforms, erased]);
+  }, [
+    project,
+    view,
+    zoom,
+    ROW,
+    snap,
+    tick,
+    ids,
+    ghost,
+    box,
+    waveforms,
+    erased,
+  ]);
   async function copy(cut = false, chosen = ids) {
     const selected = project.clips.filter((c) => chosen.includes(c.id));
     if (!selected.length) return;
@@ -747,6 +780,36 @@ export function Playlist({
           </>
         )}
         <span className="spacer" />
+        <label className="editor-row-height" title="调整轨道行高以浏览更多声部">
+          行高
+          <input
+            aria-label="编排行高"
+            type="number"
+            min={24}
+            max={128}
+            step={4}
+            defaultValue={ROW}
+            onChange={(e) => {
+              const value = e.target.valueAsNumber;
+              if (Number.isFinite(value) && value >= 24 && value <= 128) {
+                cancelGesture.current?.();
+                setRowHeight(value);
+              }
+            }}
+            onBlur={(e) => {
+              const value = Math.max(
+                24,
+                Math.min(128, e.target.valueAsNumber || ROW),
+              );
+              e.target.value = String(value);
+              cancelGesture.current?.();
+              setRowHeight(value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+          />
+        </label>
         <button
           aria-label="编排适应内容"
           title="缩放适应内容 (Shift+4)"
@@ -767,6 +830,7 @@ export function Playlist({
           type="range"
           min={4}
           max={36}
+          step="any"
           value={zoom}
           onChange={(e) => setZoom(+e.target.value)}
         />
@@ -925,6 +989,7 @@ export function Playlist({
                   y >= TOP &&
                   project.tracks[p.track] &&
                   x < 28 &&
+                  ROW >= 52 &&
                   y - (TOP + p.track * ROW - view.y) > 29
                 )
                   void run({
@@ -1287,7 +1352,8 @@ export function Playlist({
         <span>位置 {Number(cursor.toFixed(3))} tick</span>
         <span className="spacer" />
         <span className={feedback ? "gesture-feedback" : ""} role="status">
-          {feedback || "拖动边缘补白 / 裁剪 · Alt 自由定位"}
+          {feedback ||
+            "Ctrl+滚轮 时间缩放 · 拖动边缘补白 / 裁剪 · Alt 自由定位"}
         </span>
       </div>
     </div>

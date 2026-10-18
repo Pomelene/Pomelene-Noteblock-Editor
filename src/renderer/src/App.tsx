@@ -26,6 +26,7 @@ import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { Playlist } from "./Playlist";
 import { PatternEditor } from "./PatternEditor";
 import { SampleEditor } from "./SampleEditor";
+import { InstrumentManager } from "./InstrumentManager";
 import { PhrasePreview } from "./PhrasePreview";
 import { ImportDialog, ImportSummary } from "./ImportDialog";
 import { resolveShortcut } from "./shortcuts";
@@ -73,6 +74,7 @@ export function App() {
     z: 1,
   });
   const [browserVisible, setBrowserVisible] = useState(true);
+  const [instrumentManagerOpen, setInstrumentManagerOpen] = useState(false);
   const [menuState, setMenuState] = useState<{
       x: number;
       y: number;
@@ -105,6 +107,7 @@ export function App() {
     () =>
       window.studio.onImportPrompt((prompt) => {
         if (prompt) {
+          setInstrumentManagerOpen(false);
           setDialog(null);
           setInfo(null);
           setMenuState(null);
@@ -138,6 +141,7 @@ export function App() {
     if (initialGeneration.current !== undefined) audio.stop();
     initialGeneration.current = snapshot.generation;
     setViews([]);
+    setInstrumentManagerOpen(false);
     setActive("");
     setPlaylistView((v) => ({ ...v, state: "maximized", z: 1 }));
     setSource(
@@ -236,11 +240,35 @@ export function App() {
           setInfo({
             title: action === "exportNbs" ? "NBS 导出说明" : "资源与格式说明",
             body: (
-              <ul>
-                {result.warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
+              <>
+                <ul>
+                  {result.warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+                {action !== "exportNbs" &&
+                  result.snapshot.project.instruments.some((instrument) => {
+                    const sample = result.snapshot.project.samples.find(
+                      (s) => s.id === instrument.sampleId,
+                    );
+                    return (
+                      instrument.mappingTargetId === undefined &&
+                      sample &&
+                      !sample.builtin &&
+                      !sample.dataUrl
+                    );
+                  }) && (
+                    <button
+                      className="accent-button"
+                      onClick={() => {
+                        setInfo(null);
+                        setInstrumentManagerOpen(true);
+                      }}
+                    >
+                      为缺失音色设置映射…
+                    </button>
+                  )}
+              </>
             ),
           });
       }
@@ -915,6 +943,10 @@ export function App() {
                     action: () => void file("importInstruments"),
                   },
                   {
+                    label: "自定义音色与映射…",
+                    action: () => setInstrumentManagerOpen(true),
+                  },
+                  {
                     label: "新增编排轨道",
                     action: () => void run({ type: "track:add" }),
                   },
@@ -1001,7 +1033,7 @@ export function App() {
                     label: "关于 NoteBlock Editor",
                     action: () =>
                       setInfo({
-                        title: "NoteBlock Editor 0.6.1",
+                        title: "NoteBlock Editor 0.7.0",
                         body: (
                           <p>
                             Windows 桌面编辑器 · 新工作区
@@ -1032,7 +1064,7 @@ export function App() {
             ))}
             <span className="spacer" />
             <span className="version-label">
-              NOTE<b>BLOCK</b> <small>0.6</small>
+              NOTE<b>BLOCK</b> <small>0.7</small>
             </span>
           </div>
           <header className="transport-bar">
@@ -1429,6 +1461,13 @@ export function App() {
                     <span>AUDIO RESOURCES</span>
                     <small>{project.samples.length}</small>
                     <button
+                      aria-label="自定义音色与映射"
+                      title="自定义音色与映射"
+                      onClick={() => setInstrumentManagerOpen(true)}
+                    >
+                      <Music2 size={12} />
+                    </button>
+                    <button
                       aria-label="导入音频资源"
                       title="导入音频资源"
                       onClick={() => void file("importSample")}
@@ -1739,6 +1778,15 @@ export function App() {
               <button onClick={() => setInfo(null)}>关闭</button>
             </div>
           )}
+        </Dialog>
+      )}
+      {!importPrompt && instrumentManagerOpen && (
+        <Dialog
+          title="自定义音色与映射"
+          close={() => setInstrumentManagerOpen(false)}
+          className="instrument-manager-dialog"
+        >
+          <InstrumentManager project={project} run={run} report={setError} />
         </Dialog>
       )}
     </div>

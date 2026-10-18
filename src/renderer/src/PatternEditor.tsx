@@ -41,6 +41,8 @@ import {
   noteOpacity,
 } from "./instrumentFocus";
 import "./pattern-focus.css";
+import { useEditorWheelZoom, useEditorRowHeight } from "./useEditorViewport";
+import "./editor-viewport.css";
 
 const L = 82,
   H = 26;
@@ -73,6 +75,8 @@ export function PatternEditor({
     [zoom, setZoom] = useState(25),
     [snap, setSnap] = useState<SnapId>("auto"),
     [layer, setLayer] = useState(0);
+  const [layerHeight, setLayerHeight] = useState(36),
+    [pianoHeight, setPianoHeight] = useState(18);
   const [view, setView] = useState({ w: 800, h: 240, x: 0, y: 0 }),
     [ids, setIds] = useState<string[]>([]),
     [cursor, setCursor] = useState(0),
@@ -81,6 +85,18 @@ export function PatternEditor({
     [velocity, setVelocity] = useState(85),
     [pitch, setPitch] = useState(66);
   const cancelGesture = useRef<(() => void) | null>(null);
+  const updateScroll = (x: number, y: number) =>
+    setView((v) => ({ ...v, x, y }));
+  useEditorWheelZoom({
+    scroller,
+    zoom,
+    min: 4,
+    max: 64,
+    gutter: L,
+    setZoom,
+    cancelGesture,
+    onScroll: updateScroll,
+  });
   const previousSnap = useRef<SnapId>("auto");
   const choices = instrumentChoices(project.instruments, pattern.notes);
   useEffect(() => {
@@ -112,9 +128,13 @@ export function PatternEditor({
     [clipboard, setClipboard] = useState(false);
   const bar = ticksPerBar(project.meter),
     unit = snapUnit(snap, zoom, bar),
-    rh = mode === "piano" ? 18 : 36,
+    rh = mode === "piano" ? pianoHeight : layerHeight,
     rows = mode === "piano" ? 88 : Math.max(4, pattern.layers.length),
     ticks = Math.max(bar * 4, pattern.length + bar);
+  useEditorRowHeight(scroller, rh, view.y, updateScroll);
+  useEffect(() => {
+    cancelGesture.current?.();
+  }, [zoom, rh]);
   const atTick = (tick: number, alt = false) =>
     snapPosition(tick, snap, zoom, bar, alt);
   useEffect(() => {
@@ -144,7 +164,7 @@ export function PatternEditor({
   }, []);
   useEffect(() => {
     if (scroller.current) {
-      scroller.current.scrollTop = mode === "piano" ? 32 * 18 : 0;
+      scroller.current.scrollTop = mode === "piano" ? 32 * pianoHeight : 0;
       scroller.current.scrollLeft = 0;
     }
   }, [mode, pattern.id]);
@@ -357,6 +377,7 @@ export function PatternEditor({
     view,
     mode,
     zoom,
+    rh,
     snap,
     ids,
     ghost,
@@ -853,6 +874,44 @@ export function PatternEditor({
           <ChevronDown size={11} />
         </button>
         <span className="spacer" />
+        <label className="editor-row-height" title="调整行高以浏览更多声部">
+          行高
+          <input
+            key={mode}
+            aria-label={mode === "layers" ? "图层行高" : "琴键行高"}
+            type="number"
+            min={mode === "layers" ? 20 : 12}
+            max={mode === "layers" ? 96 : 48}
+            step={2}
+            defaultValue={rh}
+            onChange={(e) => {
+              const value = e.target.valueAsNumber;
+              if (
+                Number.isFinite(value) &&
+                value >= (mode === "layers" ? 20 : 12) &&
+                value <= (mode === "layers" ? 96 : 48)
+              ) {
+                cancelGesture.current?.();
+                (mode === "layers" ? setLayerHeight : setPianoHeight)(value);
+              }
+            }}
+            onBlur={(e) => {
+              const value = Math.max(
+                mode === "layers" ? 20 : 12,
+                Math.min(
+                  mode === "layers" ? 96 : 48,
+                  e.target.valueAsNumber || rh,
+                ),
+              );
+              e.target.value = String(value);
+              cancelGesture.current?.();
+              (mode === "layers" ? setLayerHeight : setPianoHeight)(value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+          />
+        </label>
         <SnapPicker label="音符吸附" value={snap} onChange={setSnap} />
         <button aria-label="音符适应内容" title="缩放适应内容" onClick={fit}>
           <Scan size={14} />
@@ -1648,7 +1707,8 @@ export function PatternEditor({
           {pattern.notes.length} 音符 · {pattern.layers.length} 图层
         </span>
         <span className="gesture-feedback" role="status">
-          {feedback || "P 绘制 · B 连续笔刷 · 右键擦除 · Alt 自由定位"}
+          {feedback ||
+            "Ctrl+滚轮 时间缩放 · P 绘制 · B 连续笔刷 · 右键擦除 · Alt 自由定位"}
         </span>
         <span className="spacer" />
         <span>

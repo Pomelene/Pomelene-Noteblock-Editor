@@ -273,15 +273,36 @@ export function toNbs(input: Project): {
       fractional ||= !Number.isInteger(n.tick - c.offset);
       const relative = Math.round(n.tick - c.offset);
       if (relative >= length) continue;
-      if (n.pitch < 21 || n.pitch > 108) {
+      const instrument = project.instruments.find(
+        (i) => i.id === n.instrument,
+      )!;
+      const target =
+        instrument.mappingTargetId === undefined
+          ? instrument
+          : project.instruments.find(
+              (i) => i.id === instrument.mappingTargetId,
+            )!;
+      const effectivePitch = n.pitch + instrument.key - target.key;
+      const pitch =
+        instrument.mappingTargetId === undefined
+          ? n.pitch
+          : Math.min(108, Math.max(21, effectivePitch));
+      const finePitch = (n.finePitch ?? 0) + (effectivePitch - pitch) * 100;
+      if (finePitch < -32768 || finePitch > 32767)
+        throw new Error(
+          `乐器“${instrument.name}”的映射调音超出 NBS 可表示范围`,
+        );
+      if (pitch < 21 || pitch > 108) {
         unsupportedPitch = true;
         continue;
       }
       notes.push({
         ...n,
         tick: relative,
+        pitch,
+        finePitch,
         layer: layerMap[n.layer],
-        instrument: customIds.get(n.instrument) ?? n.instrument,
+        instrument: customIds.get(target.id) ?? target.id,
       });
     }
     legacy.patterns.push({ id: c.id, name: source.name, length, notes });

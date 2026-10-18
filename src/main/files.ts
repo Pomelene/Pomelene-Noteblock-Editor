@@ -374,9 +374,24 @@ export class ProjectFiles {
       }
       if (action === "exportInstruments") {
         const p = this.options.session.snapshot().project,
-          entries = new Map<string, Uint8Array>();
+          entries = new Map<string, Uint8Array>(),
+          warnings: string[] = [];
         for (const i of p.instruments.filter((i) => i.id >= 16)) {
           const sample = p.samples.find((s) => s.id === i.sampleId)!;
+          if (
+            !sample.dataUrl &&
+            i.mappingTargetId !== undefined &&
+            !p.instruments.some(
+              (other) =>
+                other.sampleId === sample.id &&
+                other.mappingTargetId === undefined,
+            )
+          ) {
+            warnings.push(
+              `乐器“${i.name}”已使用映射；原音频不可用，已从采样包省略，原定义仍随工程保留。`,
+            );
+            continue;
+          }
           if (!sample.dataUrl)
             throw new Error(`乐器“${i.name}”缺少采样音频，请先导入对应资源包`);
           const relative = safeRelativePath(
@@ -393,6 +408,11 @@ export class ProjectFiles {
           }
           entries.set(relative, data);
         }
+        if (!entries.size && warnings.length)
+          return this.result(true, [
+            ...warnings,
+            "当前映射使用现有内置音色，无需导出外部采样包；没有创建 ZIP 文件。",
+          ]);
         const data = writeAudioZip(entries),
           path = await this.dialogs.save(
             "instruments",
@@ -401,6 +421,7 @@ export class ProjectFiles {
         if (!path) return this.result(false);
         await this.storage.write(path, data);
         return this.result(true, [
+          ...warnings,
           "采样包保留 NBS 乐器引用的相对路径。与对应 NBS 一同分发；在 NBS 中按上游方式导入采样 ZIP。",
         ]);
       }

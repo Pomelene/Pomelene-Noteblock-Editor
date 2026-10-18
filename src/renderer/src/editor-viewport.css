@@ -1,0 +1,28 @@
+/* A scrollable single-line toolbar keeps tools reachable in small native windows. */
+.playlist > .canvas-toolbar,
+.pattern-editor > .editor-tools {
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 40px;
+  height: 40px;
+  scrollbar-width: thin;
+}
+.playlist > .canvas-toolbar > *,
+.pattern-editor > .editor-tools > * {
+  flex-shrink: 0;
+}
+.playlist .editor-row-height,
+.pattern-editor .editor-row-height {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  font-size: 11px;
+  color: #b8cbd5;
+}
+.editor-row-height input {
+  width: 49px;
+  height: 25px;
+  padding: 3px 4px;
+  font-size: 11px;
+}
