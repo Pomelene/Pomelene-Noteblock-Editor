@@ -1,13 +1,16 @@
-# NoteBlock Editor 0.4.0
+# NoteBlock Editor 0.5.0
 
 Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录是独立重构工程，旧版 `desktop` 保留。
 
-采用源对象、编排引用、编辑视图三层模型。Pattern 和 Sample 均可反复放置、打开多个内部或原生桌面编辑实例；主进程维护工程、历史及原生文件访问，音频通过 AudioContext 时钟调度并跨窗口协调。
+采用源对象、编排引用、编辑视图三层模型。Pattern 是可编辑乐段，片段采样是只读的可复用音符快照，均可反复编排和打开多个内部或原生窗口。历史音频文件与乐器单音在“音频 / 乐器资源”中单独管理。主进程维护工程、历史及原生文件访问，音频通过 AudioContext 时钟调度并跨窗口协调。
 
 ## 已实现
 
 - Playlist 自由编排，独立引用长度/偏移、移动、框选、剪贴板、独立副本、轨道静音/独奏/锁定。
 - 片段拖长补空白、缩短裁播放窗口，保留源数据；不会自动循环或变速。
+- P 绘制、B 连续笔刷、E 选择、D 连续删除，编排另有 T 静音、S 滑移；快速拖动补齐经过的位置，回扫不重复，一个手势一次撤销。
+- 共用的拍值吸附选择器：关闭、随缩放变化的自动网格、直拍、三连音、小节；Alt 临时自由定位，拖动保留原有离格偏移。
+- Pattern / 编排选区保存为只读片段采样、导入外部 NBS 片段、只读预览及预听、根据采样创建独立 Pattern；片段引用同样可补静音和裁剪。
 - 钢琴卷帘、NBS 图层视图、音高/音色/力度/声像/微调、力度拖动、基础和弦放置。
 - 16 个实际原版采样，真实 PCM 波形，采样预听设置，自定义乐器调音与路径管理。
 - 多编辑实例、八方向缩放、最大化/还原、最小化、原生弹出；列表右键菜单与画布右键擦除。
@@ -20,7 +23,9 @@ Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录�
 
 “帮助 → 智能整理报告…”查看结果；“编辑 → 恢复原始导入布局…”会用导入时的音符和编排替换当前布局，请先保存需要保留的修改。恢复可撤销。完整工程保存报告和备份；NBS 格式本身不保存 Pattern，重新打开导出的 NBS 仍需重新选择整理方式。
 
-详细操作见 [使用说明](resources/使用说明.txt)。本轮研究见 [制作经验与算法依据](docs/smart-pattern-research.md)，验证和已知范围见 [0.4 验收报告](docs/validation-0.4.0.md)。
+保存选区会截取所选引用可见窗口内的触发事件，保留中间留白和末尾补白；不将音频识别成音符。片段音符和图层只读，音色仍引用当前工程的乐器资源；导入片段保留 tick 并跟随工程速度。新版本可读取旧 schema 2 工程；含新片段类型的工程需要 0.5 或更新版本。
+
+详细操作见 [使用说明](resources/使用说明.txt)。研究见 [制作经验与算法依据](docs/smart-pattern-research.md)，本轮验证见 [0.5 验收报告](docs/validation-0.5.0.md)，智能整理基线见 [0.4 报告](docs/validation-0.4.0.md)。
 
 ## 本地开发
 
@@ -33,6 +38,7 @@ pnpm test
 pnpm build
 pnpm smoke
 pnpm smoke:smart
+pnpm smoke:phrases
 pnpm pack:win
 pnpm smoke:packaged
 ```
@@ -47,6 +53,7 @@ node node_modules/electron-vite/bin/electron-vite.js build
 node node_modules/electron-builder/cli.js --win zip --x64
 node scripts/smoke.cjs
 node scripts/smart-import-smoke.cjs
+node scripts/phrase-interaction-smoke.cjs
 node scripts/analyze-nbs.cjs 'D:/path/to/Songs'
 ```
 

@@ -128,6 +128,48 @@ function setup() {
 }
 
 describe("audio transport", () => {
+  it("previews a frozen note phrase through its instruments rather than looking for a phrase audio buffer", async () => {
+    setup();
+    const { audio, context } = engine();
+    const p = project();
+    p.phrases = [
+      {
+        id: "frozen",
+        name: "Read only",
+        color: "#82b5a2",
+        length: 16,
+        layers: [
+          {
+            id: "l",
+            name: "Harp",
+            volume: 100,
+            panning: 100,
+            locked: false,
+            muted: false,
+            solo: false,
+          },
+        ],
+        notes: [
+          {
+            id: "n",
+            tick: 0,
+            layer: 0,
+            pitch: 66,
+            instrument: 0,
+            velocity: 80,
+          },
+        ],
+      },
+    ];
+    await audio.play(p, "frozen");
+    expect(audio.getState()).toMatchObject({
+      status: "playing",
+      scope: "frozen",
+    });
+    expect(context.sources).toHaveLength(1);
+    expect(context.sources[0].started[1]).toBe(0);
+    audio.stop();
+  });
   it("creates audio lazily, pauses at the precise clock tick, resumes tails, and stops at zero once", async () => {
     setup();
     const context = new FakeContext(),
@@ -338,12 +380,10 @@ it("releases a closed transport owner so remaining windows can stop and play nor
     one = engine(new FakeContext(), b.bridge("one")),
     two = engine(new FakeContext(), b.bridge("two"));
   await one.audio.play(project());
-  await b
-    .bridge("one")
-    .audioSignal({
-      type: "release",
-      owner: b.signals.find((s) => s.type === "claim")!.owner,
-    });
+  await b.bridge("one").audioSignal({
+    type: "release",
+    owner: b.signals.find((s) => s.type === "claim")!.owner,
+  });
   expect(two.audio.getState()).toMatchObject({ status: "stopped", tick: 0 });
   two.audio.seek(3);
   expect(two.audio.getState().tick).toBe(3);

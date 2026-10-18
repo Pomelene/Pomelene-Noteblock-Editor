@@ -119,7 +119,9 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
   }
   let endTick: number;
   if (scope !== "song") {
-    const pattern = project.patterns.find((p) => p.id === scope);
+    const pattern = [...project.patterns, ...(project.phrases ?? [])].find(
+      (p) => p.id === scope,
+    );
     if (pattern) {
       endTick = pattern.length;
       addPattern(pattern, pattern.id, 0, pattern.length, 0);
@@ -153,8 +155,10 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
         clip.length <= 0
       )
         continue;
-      if (clip.kind === "pattern") {
-        const pattern = project.patterns.find((p) => p.id === clip.sourceId);
+      if (clip.kind === "pattern" || clip.kind === "phrase") {
+        const pattern = (
+          clip.kind === "pattern" ? project.patterns : (project.phrases ?? [])
+        ).find((p) => p.id === clip.sourceId);
         if (!pattern) throw new Error(`Missing pattern: ${clip.sourceId}`);
         addPattern(
           pattern,

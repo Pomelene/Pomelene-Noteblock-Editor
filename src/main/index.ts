@@ -79,7 +79,10 @@ function current(payload: unknown): Record<string, unknown> {
     throw new Error("工程已切换，请使用当前工程视图");
   return object;
 }
-function createWindow(kind?: "pattern" | "sample", id?: string): BrowserWindow {
+function createWindow(
+  kind?: "pattern" | "phrase" | "sample",
+  id?: string,
+): BrowserWindow {
   const win = new BrowserWindow({
     width: kind ? 1000 : 1480,
     height: kind ? 700 : 900,
@@ -263,6 +266,7 @@ app.whenReady().then(() => {
         "exportNbs",
         "exportInstruments",
         "importSample",
+        "importPhrase",
         "importInstruments",
       ].includes(p.action as string)
     )
@@ -275,11 +279,15 @@ app.whenReady().then(() => {
     const p = current(payload),
       project = session.snapshot().project;
     if (
-      (p.kind !== "pattern" && p.kind !== "sample") ||
+      (p.kind !== "pattern" && p.kind !== "phrase" && p.kind !== "sample") ||
       typeof p.id !== "string" ||
-      !(p.kind === "pattern" ? project.patterns : project.samples).some(
-        (s) => s.id === p.id,
-      )
+      !(
+        p.kind === "pattern"
+          ? project.patterns
+          : p.kind === "phrase"
+            ? (project.phrases ?? [])
+            : project.samples
+      ).some((s) => s.id === p.id)
     )
       throw new Error("编辑对象不存在");
     createWindow(p.kind, p.id);
@@ -376,7 +384,11 @@ app.whenReady().then(() => {
             click: () => void doFile("exportInstruments"),
           },
           { type: "separator" },
-          { label: "导入采样…", click: () => void doFile("importSample") },
+          {
+            label: "导入 NBS 片段采样…",
+            click: () => void doFile("importPhrase"),
+          },
+          { label: "导入音频资源…", click: () => void doFile("importSample") },
           {
             label: "导入自定义乐器…",
             click: () => void doFile("importInstruments"),

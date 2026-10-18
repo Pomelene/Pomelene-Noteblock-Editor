@@ -27,6 +27,8 @@ export interface Pattern {
   notes: Note[];
   layers: Layer[];
 }
+/** A reusable note snapshot. Only its display metadata is editable. */
+export interface PhraseSample extends Pattern {}
 export interface Sample {
   id: string;
   name: string;
@@ -56,7 +58,7 @@ export interface Track {
 }
 export interface Clip {
   id: string;
-  kind: "pattern" | "sample";
+  kind: "pattern" | "phrase" | "sample";
   sourceId: string;
   tick: number;
   length: number;
@@ -109,6 +111,7 @@ export interface Project {
   bpm: number;
   meter: string;
   patterns: Pattern[];
+  phrases?: PhraseSample[];
   samples: Sample[];
   instruments: Instrument[];
   tracks: Track[];
@@ -127,6 +130,15 @@ export interface Snapshot {
 }
 export type Command =
   | { type: "import:restoreOriginal" }
+  | { type: "phrase:fromPattern"; patternId: string; name?: string }
+  | { type: "phrase:fromClips"; ids: string[]; name?: string }
+  | {
+      type: "phrase:update";
+      id: string;
+      patch: Partial<Pick<PhraseSample, "name" | "color">>;
+    }
+  | { type: "phrase:remove"; id: string }
+  | { type: "pattern:fromPhrase"; phraseId: string }
   | {
       type: "project:update";
       patch: Partial<Pick<Project, "title" | "bpm" | "meter" | "loop">>;
@@ -198,6 +210,7 @@ export type FileAction =
   | "exportNbs"
   | "exportInstruments"
   | "importSample"
+  | "importPhrase"
   | "importInstruments";
 export interface FileResult {
   snapshot: Snapshot;
@@ -229,7 +242,7 @@ export interface StudioAPI {
   dispatch(command: Command, originGeneration?: number): Promise<Snapshot>;
   onSnapshot(fn: (s: Snapshot) => void): () => void;
   file(action: FileAction): Promise<FileResult>;
-  openEditor(kind: "pattern" | "sample", id: string): Promise<void>;
+  openEditor(kind: "pattern" | "phrase" | "sample", id: string): Promise<void>;
   audioSignal(signal: AudioSignal): Promise<void>;
   onAudioSignal(fn: (s: AudioSignal) => void): () => void;
   readClipboard(): Promise<Omit<Note, "id">[]>;

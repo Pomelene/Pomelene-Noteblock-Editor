@@ -34,7 +34,9 @@ import {
 } from "./zip";
 
 export interface FileDialogs {
-  open(kind: "project" | "sample" | "instruments"): Promise<string | undefined>;
+  open(
+    kind: "project" | "phrase" | "sample" | "instruments",
+  ): Promise<string | undefined>;
   save(
     format: "project" | "nbs" | "instruments",
     suggested: string,
@@ -84,9 +86,11 @@ export function nativeFileDialogs(
           title:
             kind === "project"
               ? "打开工程 / NBS"
-              : kind === "sample"
-                ? "导入采样"
-                : "导入 NBS 乐器定义 / 采样 ZIP",
+              : kind === "phrase"
+                ? "导入 NBS 片段采样"
+                : kind === "sample"
+                  ? "导入采样"
+                  : "导入 NBS 乐器定义 / 采样 ZIP",
           properties: ["openFile"],
           filters: [
             kind === "project"
@@ -94,20 +98,25 @@ export function nativeFileDialogs(
                   name: "NoteBlock Project / Song",
                   extensions: ["nbproject", "nbs"],
                 }
-              : kind === "sample"
-                ? {
-                    name: "音频采样",
-                    extensions: [
-                      "wav",
-                      "ogg",
-                      "mp3",
-                      "flac",
-                      "m4a",
-                      "aac",
-                      "webm",
-                    ],
-                  }
-                : { name: "NBS / Instrument pack", extensions: ["nbs", "zip"] },
+              : kind === "phrase"
+                ? { name: "NBS 音符片段采样", extensions: ["nbs"] }
+                : kind === "sample"
+                  ? {
+                      name: "音频采样",
+                      extensions: [
+                        "wav",
+                        "ogg",
+                        "mp3",
+                        "flac",
+                        "m4a",
+                        "aac",
+                        "webm",
+                      ],
+                    }
+                  : {
+                      name: "NBS / Instrument pack",
+                      extensions: ["nbs", "zip"],
+                    },
             { name: "所有文件", extensions: ["*"] },
           ],
         };
@@ -413,10 +422,84 @@ export class ProjectFiles {
         return this.result(true);
       }
       if (action === "importInstruments") return await this.importInstruments();
+      if (action === "importPhrase") return await this.importPhrase();
       throw new Error("未知文件操作");
     } finally {
       this.busy = false;
     }
+  }
+  private async importPhrase(): Promise<FileResult> {
+    const generation = this.options.session.documentGeneration;
+    const path = await this.dialogs.open("phrase");
+    if (!path) return this.result(false);
+    const bytes = await this.storage.read(path),
+      warnings: string[] = [];
+    if (bytes.byteLength > MAX_PROJECT_BYTES)
+      throw new Error("文件超过 96 MiB 限制");
+    if (isAudioPath(path))
+      throw new Error("音频资源不能导入为 NBS 音符片段采样");
+    const imported = fromNbs(bytes);
+    await this.resolveSamples(imported, dirname(path), warnings, false);
+    const capture = new Session(imported).dispatch({
+      type: "phrase:fromClips",
+      ids: imported.clips.map((c) => c.id),
+      name: imported.title || basename(path, extname(path)),
+    }).project.phrases![0];
+    for (const layer of capture.layers) delete layer.sourceIndex;
+    if (this.options.session.documentGeneration !== generation)
+      return this.result(false);
+    const hostTempo = this.options.session.snapshot().project.bpm;
+    if (hostTempo !== imported.bpm)
+      warnings.push(
+        `片段原速度为 ${imported.bpm} BPM；保留原始 tick，按当前工程 ${hostTempo} BPM 播放。`,
+      );
+    this.options.session.transact((p) => {
+      const instrumentMap = new Map<number, number>();
+      for (const oldId of new Set(capture.notes.map((n) => n.instrument))) {
+        const instrument = imported.instruments.find((i) => i.id === oldId)!;
+        const source = imported.samples.find(
+          (s) => s.id === instrument.sampleId,
+        )!;
+        let sample = p.samples.find(
+          (s) =>
+            s.builtin === source.builtin &&
+            s.dataUrl === source.dataUrl &&
+            s.originalPath === source.originalPath &&
+            s.rootKey === source.rootKey &&
+            s.volume === source.volume &&
+            s.panning === source.panning,
+        );
+        if (!sample) {
+          sample = { ...source, id: uid() };
+          p.samples.push(sample);
+        }
+        const existing = p.instruments.find(
+          (i) =>
+            i.sampleId === sample.id &&
+            i.key === instrument.key &&
+            i.pressKey === instrument.pressKey &&
+            (oldId < 16
+              ? i.id === oldId
+              : i.id >= 16 && i.name === instrument.name),
+        );
+        let id = existing?.id;
+        if (id === undefined) {
+          id =
+            oldId < 16 && !p.instruments.some((i) => i.id === oldId)
+              ? oldId
+              : Array.from({ length: 240 }, (_, index) => index + 16).find(
+                  (id) => !p.instruments.some((i) => i.id === id),
+                );
+          if (id === undefined) throw new Error("自定义乐器已达到 240 个上限");
+          p.instruments.push({ ...instrument, id, sampleId: sample.id });
+        }
+        instrumentMap.set(oldId, id);
+      }
+      for (const note of capture.notes)
+        note.instrument = instrumentMap.get(note.instrument)!;
+      (p.phrases ??= []).push(capture);
+    });
+    return this.result(true, warnings);
   }
   private async resolveSamples(
     project: Project,

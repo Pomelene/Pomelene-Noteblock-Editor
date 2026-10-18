@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Pencil,
+  Paintbrush,
+  Eraser,
+  Scan,
   MousePointer2,
   Copy,
   Scissors,
@@ -22,7 +25,15 @@ import {
 } from "../../shared/model";
 import { audio } from "./audio";
 import type { Run, ShowMenu, Source } from "./ui";
-import { snapTick } from "./editing";
+import { SnapPicker } from "./SnapPicker";
+import {
+  snapPosition,
+  snapUnit,
+  snapDelta,
+  gridTicks,
+  type SnapId,
+} from "./snap";
+import { BrushStroke, captureGesture, segmentIntersectsRect } from "./gestures";
 
 const L = 82,
   H = 26;
@@ -50,9 +61,9 @@ export function PatternEditor({
   const scroller = useRef<HTMLDivElement>(null),
     canvas = useRef<HTMLCanvasElement>(null);
   const [mode, setMode] = useState<"piano" | "layers">("piano"),
-    [tool, setTool] = useState<"draw" | "select">("draw"),
+    [tool, setTool] = useState<"draw" | "brush" | "select" | "delete">("draw"),
     [zoom, setZoom] = useState(25),
-    [snap, setSnap] = useState(1),
+    [snap, setSnap] = useState<SnapId>("auto"),
     [layer, setLayer] = useState(0);
   const [view, setView] = useState({ w: 800, h: 240, x: 0, y: 0 }),
     [ids, setIds] = useState<string[]>([]),
@@ -60,6 +71,9 @@ export function PatternEditor({
     [instrument, setInstrument] = useState(0),
     [velocity, setVelocity] = useState(85),
     [pitch, setPitch] = useState(66);
+  const cancelGesture = useRef<(() => void) | null>(null);
+  const [erased, setErased] = useState<string[]>([]),
+    [feedback, setFeedback] = useState("");
   const [ghost, setGhost] = useState<Note[]>([]),
     [box, setBox] = useState<{
       x: number;
@@ -69,10 +83,20 @@ export function PatternEditor({
     } | null>(null),
     [clipboard, setClipboard] = useState(false);
   const bar = ticksPerBar(project.meter),
-    unit = snap === -1 ? bar : snap,
+    unit = snapUnit(snap, zoom, bar),
     rh = mode === "piano" ? 18 : 36,
     rows = mode === "piano" ? 88 : Math.max(4, pattern.layers.length),
     ticks = Math.max(bar * 4, pattern.length + bar);
+  const atTick = (tick: number, alt = false) =>
+    snapPosition(tick, snap, zoom, bar, alt);
+  useEffect(() => {
+    cancelGesture.current?.();
+    setIds([]);
+    return () => cancelGesture.current?.();
+  }, [project.id, pattern.id, mode]);
+  useEffect(() => {
+    cancelGesture.current?.();
+  }, [project]);
   const selected = pattern.notes.filter((n) => ids.includes(n.id)),
     first = selected[0],
     ins = project.instruments.find((i) => i.id === instrument),
@@ -168,10 +192,14 @@ export function PatternEditor({
     }
     const from = Math.floor(view.x / zoom),
       to = Math.ceil((view.x + view.w) / zoom);
-    for (let t = from; t <= to; t++) {
+    for (const t of gridTicks(from, to, snap, zoom, bar)) {
       const x = L + t * zoom - view.x;
       ctx.fillStyle =
-        t % bar === 0 ? "#4b5760" : t % 4 === 0 ? "#38444e" : "#2c3740";
+        Math.abs(t / bar - Math.round(t / bar)) < 1e-6
+          ? "#4b5760"
+          : Math.abs(t / 4 - Math.round(t / 4)) < 1e-6
+            ? "#38444e"
+            : "#2c3740";
       ctx.fillRect(x, H, 1, view.h);
     }
     const endX = L + pattern.length * zoom - view.x;
@@ -186,7 +214,11 @@ export function PatternEditor({
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    for (const original of pattern.notes) {
+    for (const original of [
+      ...pattern.notes,
+      ...ghost.filter((g) => !pattern.notes.some((n) => n.id === g.id)),
+    ]) {
+      if (erased.includes(original.id)) continue;
       const note = ghost.find((n) => n.id === original.id) ?? original,
         row = mode === "piano" ? 108 - note.pitch : note.layer,
         x = L + note.tick * zoom - view.x + 1,
@@ -291,6 +323,7 @@ export function PatternEditor({
     cursor,
     layer,
     playTick,
+    erased,
   ]);
   async function copy(cut = false) {
     try {
@@ -378,6 +411,13 @@ export function PatternEditor({
   function tools(x: number, y: number) {
     menu(x, y, [
       {
+        label: "保存为片段采样",
+        action: () =>
+          void run({ type: "phrase:fromPattern", patternId: pattern.id }),
+      },
+      { label: "缩放适应内容", action: fit },
+      { label: "取消选择", action: () => setIds([]) },
+      {
         label: "全选音符",
         shortcut: "Ctrl+A",
         action: () => setIds(pattern.notes.map((n) => n.id)),
@@ -461,6 +501,15 @@ export function PatternEditor({
       })),
     });
   }
+  function fit() {
+    setZoom(
+      Math.max(
+        12,
+        Math.min(42, (view.w - L - 24) / Math.max(bar, pattern.length)),
+      ),
+    );
+    if (scroller.current) scroller.current.scrollLeft = 0;
+  }
   const visibleNotes = pattern.notes.filter(
     (n) =>
       n.tick * zoom >= view.x - unit * zoom &&
@@ -480,6 +529,19 @@ export function PatternEditor({
           return;
         const key = e.key.toLowerCase(),
           mod = e.ctrlKey || e.metaKey;
+        if (!mod && !e.altKey && ["p", "b", "e", "d"].includes(key)) {
+          e.preventDefault();
+          e.stopPropagation();
+          setTool(
+            ({ p: "draw", b: "brush", e: "select", d: "delete" } as const)[
+              key as "p" | "b" | "e" | "d"
+            ],
+          );
+        }
+        if (e.key === "Escape") {
+          cancelGesture.current?.();
+          setIds([]);
+        }
         if (mod && ["a", "c", "x", "v", "b"].includes(key)) {
           e.preventDefault();
           e.stopPropagation();
@@ -538,11 +600,27 @@ export function PatternEditor({
         <span className="divider" />
         <button
           aria-label="音符绘制"
-          title="绘制音符"
+          title="绘制音符 (P)"
           className={tool === "draw" ? "selected" : ""}
           onClick={() => setTool("draw")}
         >
           <Pencil size={14} />
+        </button>
+        <button
+          aria-label="音符笔刷"
+          title="连续绘制 (B)"
+          className={tool === "brush" ? "selected" : ""}
+          onClick={() => setTool("brush")}
+        >
+          <Paintbrush size={14} />
+        </button>
+        <button
+          aria-label="音符删除"
+          title="连续删除 (D)"
+          className={tool === "delete" ? "selected" : ""}
+          onClick={() => setTool("delete")}
+        >
+          <Eraser size={14} />
         </button>
         <button
           aria-label="音符框选"
@@ -612,28 +690,22 @@ export function PatternEditor({
           <ChevronDown size={11} />
         </button>
         <span className="spacer" />
-        <select
-          aria-label="音符吸附"
-          value={snap}
-          onChange={(e) => setSnap(+e.target.value)}
-        >
-          <option value={0.5}>1/2 tick</option>
-          <option value={1 / 3}>三连音</option>
-          <option value={1}>1 tick</option>
-          <option value={2}>1/2 拍</option>
-          <option value={4}>1 拍</option>
-          <option value={-1}>1 小节</option>
-        </select>
+        <SnapPicker label="音符吸附" value={snap} onChange={setSnap} />
+        <button aria-label="音符适应内容" title="缩放适应内容" onClick={fit}>
+          <Scan size={14} />
+        </button>
         <select
           aria-label="音符缩放"
           value={zoom}
           onChange={(e) => setZoom(+e.target.value)}
         >
-          {[12, 18, 25, 32, 42].map((v) => (
-            <option value={v} key={v}>
-              {v * 4}%
-            </option>
-          ))}
+          {[...new Set([12, 18, 25, 32, 42, zoom])]
+            .sort((a, b) => a - b)
+            .map((v) => (
+              <option value={v} key={v}>
+                {Math.round(v * 4)}%
+              </option>
+            ))}
         </select>
         <button
           aria-label="播放此 Pattern"
@@ -837,7 +909,7 @@ export function PatternEditor({
                   p = point(x, y);
                 el.closest<HTMLElement>(".pattern-editor")?.focus();
                 if (x < L) {
-                  if (e.button === 0) {
+                  if (e.button === 0 && y >= H) {
                     if (mode === "piano" && p.pitch >= 21 && p.pitch <= 108) {
                       setPitch(p.pitch);
                       if (e.ctrlKey)
@@ -861,158 +933,282 @@ export function PatternEditor({
                   }
                   return;
                 }
-                const at = snapTick(p.tick, unit, e.altKey);
+                const at = atTick(p.tick, e.altKey);
                 setCursor(at);
                 if (y < H) {
                   if (e.button === 0) seek(at);
                   return;
                 }
-                if (p.row < 0 || p.row >= rows) return;
+                if (p.row < 0 || p.row >= rows || ![0, 2].includes(e.button))
+                  return;
+                cancelGesture.current?.();
+                e.preventDefault();
                 const note = hit(x, y);
-                if (note && pattern.layers[note.layer]?.locked) return;
-                el.setPointerCapture(e.pointerId);
-                const clear = () => {
-                  el.onpointermove = null;
-                  el.onpointerup = null;
-                  el.onpointercancel = null;
-                  setGhost([]);
-                  setBox(null);
+                const start = (
+                  move: (v: PointerEvent) => void,
+                  up: (v: PointerEvent) => void,
+                ) => {
+                  cancelGesture.current = captureGesture(
+                    el,
+                    e.pointerId,
+                    move,
+                    up,
+                    () => {
+                      setGhost([]);
+                      setErased([]);
+                      setBox(null);
+                      setFeedback("");
+                      cancelGesture.current = null;
+                    },
+                  );
                 };
-                el.onpointercancel = clear;
-                if (e.button === 2) {
-                  const erased = new Set<string>();
-                  const erase = (xx: number, yy: number) => {
-                    const n = hit(xx, yy);
-                    if (
-                      n &&
-                      !erased.has(n.id) &&
-                      !pattern.layers[n.layer]?.locked
-                    ) {
-                      erased.add(n.id);
+                if (e.button === 2 || tool === "delete") {
+                  const removed = new Set<string>();
+                  let previous = { x: p.tick, y: p.row + 0.5 };
+                  const erase = (v: { clientX: number; clientY: number }) => {
+                    const q = point(
+                        v.clientX - rect.left,
+                        v.clientY - rect.top,
+                      ),
+                      end = { x: q.tick, y: q.row + 0.5 };
+                    for (const n of pattern.notes)
+                      if (
+                        !pattern.layers[n.layer]?.locked &&
+                        segmentIntersectsRect(previous, end, {
+                          x: n.tick,
+                          y: mode === "piano" ? 108 - n.pitch : n.layer,
+                          w: Math.max(0.55, unit * 0.9),
+                          h: 1,
+                        })
+                      )
+                        removed.add(n.id);
+                    previous = end;
+                    setErased([...removed]);
+                    setFeedback(`擦除 ${removed.size} 个音符 · 松开提交`);
+                  };
+                  erase(e);
+                  start(erase, (up) => {
+                    erase(up);
+                    if (removed.size)
                       void run({
                         type: "notes:remove",
                         patternId: pattern.id,
-                        ids: [n.id],
+                        ids: [...removed],
                       });
-                    }
-                  };
-                  erase(x, y);
-                  el.onpointermove = (move) =>
-                    erase(move.clientX - rect.left, move.clientY - rect.top);
-                  el.onpointerup = clear;
+                  });
                   return;
                 }
-                if (e.button !== 0) {
-                  clear();
-                  return;
-                }
-                if (!note && (tool === "select" || e.ctrlKey || e.shiftKey)) {
-                  el.onpointermove = (move) =>
-                    setBox({
-                      x: Math.min(x, move.clientX - rect.left),
-                      y: Math.min(y, move.clientY - rect.top),
-                      w: Math.abs(move.clientX - rect.left - x),
-                      h: Math.abs(move.clientY - rect.top - y),
-                    });
-                  el.onpointerup = (up) => {
-                    const end = point(
-                      up.clientX - rect.left,
-                      up.clientY - rect.top,
-                    );
-                    const found = pattern.notes
-                      .filter(
-                        (n) =>
-                          n.tick >= Math.min(p.tick, end.tick) &&
-                          n.tick <= Math.max(p.tick, end.tick) &&
-                          (mode === "piano"
-                            ? n.pitch >= Math.min(p.pitch, end.pitch) &&
-                              n.pitch <= Math.max(p.pitch, end.pitch)
-                            : n.layer >= Math.min(p.row, end.row) &&
-                              n.layer <= Math.max(p.row, end.row)),
-                      )
-                      .map((n) => n.id);
+                if (e.ctrlKey || tool === "select") {
+                  if (note && e.ctrlKey) {
                     setIds(
-                      e.ctrlKey ? [...new Set([...ids, ...found])] : found,
+                      ids.includes(note.id)
+                        ? ids.filter((id) => id !== note.id)
+                        : [...ids, note.id],
                     );
-                    clear();
-                  };
-                  return;
-                }
-                if (!note) {
-                  if (p.pitch >= 21 && p.pitch <= 108) {
-                    setPitch(p.pitch);
-                    addNotes(at, [p.pitch], mode === "layers" ? p.row : layer);
-                    void audio
-                      .preview(project, instrument, p.pitch, velocity)
-                      .catch((e) => report(e.message));
+                    return;
                   }
-                  clear();
+                  start(
+                    (move) =>
+                      setBox({
+                        x: Math.min(x, move.clientX - rect.left),
+                        y: Math.min(y, move.clientY - rect.top),
+                        w: Math.abs(move.clientX - rect.left - x),
+                        h: Math.abs(move.clientY - rect.top - y),
+                      }),
+                    (up) => {
+                      const end = point(
+                          up.clientX - rect.left,
+                          up.clientY - rect.top,
+                        ),
+                        found = pattern.notes
+                          .filter(
+                            (n) =>
+                              n.tick >= Math.min(p.tick, end.tick) &&
+                              n.tick <= Math.max(p.tick, end.tick) &&
+                              (mode === "piano"
+                                ? n.pitch >= Math.min(p.pitch, end.pitch) &&
+                                  n.pitch <= Math.max(p.pitch, end.pitch)
+                                : n.layer >= Math.min(p.row, end.row) &&
+                                  n.layer <= Math.max(p.row, end.row)),
+                          )
+                          .map((n) => n.id);
+                      setIds(
+                        e.ctrlKey ? [...new Set([...ids, ...found])] : found,
+                      );
+                    },
+                  );
                   return;
                 }
-                const next = e.ctrlKey
-                  ? ids.includes(note.id)
-                    ? ids.filter((id) => id !== note.id)
-                    : [...ids, note.id]
-                  : ids.includes(note.id)
-                    ? ids
-                    : [note.id];
+                const brush = tool === "brush" || (!note && e.shiftKey);
+                if (brush || !note) {
+                  const spacing = e.altKey ? 1 / 24 : unit,
+                    stroke = new BrushStroke(spacing, 0);
+                  let pending: Note[] = [];
+                  const insert = (tick: number, row: number) => {
+                    const key = mode === "piano" ? 108 - row : pitch,
+                      targetLayer = mode === "layers" ? row : layer;
+                    if (
+                      tick < 0 ||
+                      row < 0 ||
+                      row >= rows ||
+                      key < 21 ||
+                      key > 108 ||
+                      pattern.layers[targetLayer]?.locked
+                    )
+                      return;
+                    const all = [...pattern.notes, ...pending];
+                    if (
+                      all.some(
+                        (n) =>
+                          Math.abs(n.tick - tick) < 1e-7 &&
+                          (mode === "piano"
+                            ? n.pitch === key
+                            : n.layer === targetLayer),
+                      )
+                    )
+                      return;
+                    let next = targetLayer;
+                    while (
+                      all.some(
+                        (n) =>
+                          Math.abs(n.tick - tick) < 1e-7 && n.layer === next,
+                      ) ||
+                      pattern.layers[next]?.locked
+                    )
+                      next++;
+                    pending.push({
+                      id: `preview-${pending.length}`,
+                      tick,
+                      layer: next,
+                      pitch: key,
+                      instrument,
+                      velocity,
+                      panning: 100,
+                      finePitch: 0,
+                    });
+                  };
+                  const paint = (v: {
+                    clientX: number;
+                    clientY: number;
+                    altKey: boolean;
+                  }) => {
+                    const q = point(
+                      v.clientX - rect.left,
+                      v.clientY - rect.top,
+                    );
+                    if (brush) {
+                      const cells = stroke.visit(q.tick, q.row);
+                      if (stroke.exceeded) {
+                        pending = [];
+                        setGhost([]);
+                        setFeedback(
+                          "手势超过 10,000 个位置，已取消；请分段绘制",
+                        );
+                        return;
+                      }
+                      for (const cell of cells) insert(cell.tick, cell.row);
+                    } else {
+                      pending = [];
+                      insert(atTick(q.tick, v.altKey), q.row);
+                    }
+                    setGhost([...pending]);
+                    setFeedback(
+                      `${brush ? "笔刷" : "放置"} ${pending.length} 个音符 · 松开提交`,
+                    );
+                  };
+                  setPitch(p.pitch);
+                  paint(e);
+                  start(paint, (up) => {
+                    paint(up);
+                    if (pending.length)
+                      void run({
+                        type: "notes:add",
+                        patternId: pattern.id,
+                        notes: pending.map(({ id, ...n }) => n),
+                      }).then((result) => {
+                        if (result)
+                          setIds(
+                            result.project.patterns
+                              .find((v) => v.id === pattern.id)!
+                              .notes.slice(-pending.length)
+                              .map((n) => n.id),
+                          );
+                      });
+                  });
+                  return;
+                }
+                if (pattern.layers[note.layer]?.locked) return;
+                const next = ids.includes(note.id) ? ids : [note.id];
                 setIds(next);
                 const originals = pattern.notes.filter((n) =>
                     next.includes(n.id),
                   ),
-                  sx = e.clientX,
-                  sy = e.clientY;
+                  copyDrag = e.shiftKey;
                 const delta = (event: PointerEvent) => ({
-                  ticks:
-                    Math.round(
-                      (event.clientX - sx) /
-                        zoom /
-                        (event.altKey ? 1 / 24 : unit),
-                    ) * (event.altKey ? 1 / 24 : unit),
+                  ticks: Math.max(
+                    -Math.min(...originals.map((n) => n.tick)),
+                    snapDelta(
+                      (event.clientX - e.clientX) / zoom,
+                      snap,
+                      zoom,
+                      bar,
+                      event.altKey,
+                    ),
+                  ),
                   pitches:
                     mode === "piano"
-                      ? -Math.round((event.clientY - sy) / rh)
+                      ? Math.max(
+                          21 - Math.min(...originals.map((n) => n.pitch)),
+                          Math.min(
+                            108 - Math.max(...originals.map((n) => n.pitch)),
+                            -Math.round((event.clientY - e.clientY) / rh),
+                          ),
+                        )
                       : 0,
                   layers:
                     mode === "layers"
-                      ? Math.round((event.clientY - sy) / rh)
+                      ? Math.max(
+                          -Math.min(...originals.map((n) => n.layer)),
+                          Math.round((event.clientY - e.clientY) / rh),
+                        )
                       : 0,
                 });
-                el.onpointermove = (move) => {
-                  const d = delta(move);
-                  setGhost(
-                    originals.map((n) => ({
-                      ...n,
-                      tick: n.tick + d.ticks,
-                      pitch: n.pitch + d.pitches,
-                      layer: n.layer + d.layers,
-                    })),
-                  );
-                };
-                el.onpointerup = (up) => {
-                  const d = delta(up);
-                  if (d.ticks || d.pitches || d.layers) {
-                    if (up.shiftKey)
-                      void run({
-                        type: "notes:add",
-                        patternId: pattern.id,
-                        notes: originals.map(({ id, ...n }) => ({
-                          ...n,
-                          tick: n.tick + d.ticks,
-                          pitch: n.pitch + d.pitches,
-                          layer: n.layer + d.layers,
-                        })),
-                      });
-                    else
-                      void run({
-                        type: "notes:move",
-                        patternId: pattern.id,
-                        ids: next,
-                        ...d,
-                      });
-                  }
-                  clear();
-                };
+                start(
+                  (move) => {
+                    const d = delta(move);
+                    setGhost(
+                      originals.map((n) => ({
+                        ...n,
+                        tick: n.tick + d.ticks,
+                        pitch: n.pitch + d.pitches,
+                        layer: n.layer + d.layers,
+                      })),
+                    );
+                  },
+                  (up) => {
+                    const d = delta(up);
+                    if (d.ticks || d.pitches || d.layers) {
+                      if (copyDrag)
+                        void run({
+                          type: "notes:add",
+                          patternId: pattern.id,
+                          notes: originals.map(({ id, ...n }) => ({
+                            ...n,
+                            tick: n.tick + d.ticks,
+                            pitch: n.pitch + d.pitches,
+                            layer: n.layer + d.layers,
+                          })),
+                        });
+                      else
+                        void run({
+                          type: "notes:move",
+                          patternId: pattern.id,
+                          ids: next,
+                          ...d,
+                        });
+                    }
+                  },
+                );
               }}
             />
           </div>
@@ -1170,6 +1366,9 @@ export function PatternEditor({
       <div className="canvas-footer">
         <span>
           {pattern.notes.length} 音符 · {pattern.layers.length} 图层
+        </span>
+        <span className="gesture-feedback" role="status">
+          {feedback || "P 绘制 · B 连续笔刷 · 右键擦除 · Alt 自由定位"}
         </span>
         <span className="spacer" />
         <span>

@@ -6,6 +6,7 @@ import {
   FileAudio,
   FolderOpen,
   Grid2X2,
+  LockKeyhole,
   Music2,
   Pause,
   Play,
@@ -25,6 +26,7 @@ import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { Playlist } from "./Playlist";
 import { PatternEditor } from "./PatternEditor";
 import { SampleEditor } from "./SampleEditor";
+import { PhrasePreview } from "./PhrasePreview";
 import { ImportDialog, ImportSummary } from "./ImportDialog";
 import {
   ticksPerBar,
@@ -34,6 +36,7 @@ import {
   type TransportState,
 } from "../../shared/model";
 import type { Source, RequestText } from "./ui";
+import { getSource } from "./ui";
 
 interface TextDialog {
   title: string;
@@ -50,7 +53,9 @@ export function App() {
     [views, setViews] = useState<EditorView[]>([]),
     [active, setActive] = useState(""),
     [query, setQuery] = useState(""),
-    [filter, setFilter] = useState<"all" | "pattern" | "sample">("all"),
+    [filter, setFilter] = useState<"all" | "pattern" | "phrase" | "sample">(
+      "all",
+    ),
     [sidebarWidth, setSidebarWidth] = useState(224);
   const [menuState, setMenuState] = useState<{
       x: number;
@@ -73,7 +78,13 @@ export function App() {
     [stops, setStops] = useState(0);
   const native = new URLSearchParams(location.search),
     nativeKind = native.get("kind"),
-    nativeId = native.get("id");
+    nativeId = native.get("id"),
+    nativeSourceKind: Source["kind"] =
+      nativeKind === "sample"
+        ? "sample"
+        : nativeKind === "phrase"
+          ? "phrase"
+          : "pattern";
   useEffect(
     () =>
       window.studio.onImportPrompt((prompt) => {
@@ -101,9 +112,11 @@ export function App() {
               (p) => p.id === s.scope,
             )
               ? "pattern"
-              : projectRef.current?.samples.some((p) => p.id === s.scope)
-                ? "sample"
-                : undefined;
+              : projectRef.current?.phrases?.some((p) => p.id === s.scope)
+                ? "phrase"
+                : projectRef.current?.samples.some((p) => p.id === s.scope)
+                  ? "sample"
+                  : undefined;
             if (kind)
               setSource((old) =>
                 old.id === s.scope && old.kind === kind
@@ -129,7 +142,7 @@ export function App() {
     setActive("");
     setSource(
       nativeKind && nativeId
-        ? { kind: nativeKind === "sample" ? "sample" : "pattern", id: nativeId }
+        ? { kind: nativeSourceKind, id: nativeId }
         : snapshot.project.patterns.length
           ? { kind: "pattern", id: snapshot.project.patterns[0].id }
           : { kind: "sample", id: snapshot.project.samples[0]?.id ?? "" },
@@ -165,10 +178,18 @@ export function App() {
             saveAs: "工程已另存",
             exportNbs: "NBS 已导出",
             exportInstruments: "乐器采样包已导出",
-            importSample: "采样已导入",
+            importSample: "音频资源已导入",
+            importPhrase: "只读片段采样已导入",
             importInstruments: "乐器资源已关联",
           }[action],
         );
+        if (action === "importPhrase") {
+          const phrase = result.snapshot.project.phrases?.at(-1);
+          if (phrase) {
+            setFilter("phrase");
+            openView({ kind: "phrase", id: phrase.id });
+          }
+        }
         if (result.warnings.length)
           setInfo({
             title: action === "exportNbs" ? "NBS 导出说明" : "资源与格式说明",
@@ -221,6 +242,27 @@ export function App() {
       openView({ kind: "pattern", id: p.id });
     }
   }
+  async function freezePattern(patternId: string) {
+    const s = await run({ type: "phrase:fromPattern", patternId });
+    const phrase = s?.project.phrases?.at(-1);
+    if (phrase) {
+      setFilter("phrase");
+      openView({ kind: "phrase", id: phrase.id });
+      setStatus("已保存为只读片段采样");
+    }
+  }
+  async function patternFromPhrase(phraseId: string) {
+    const s = await run({ type: "pattern:fromPhrase", phraseId });
+    const p = s?.project.patterns.at(-1);
+    if (!p) return;
+    setFilter("pattern");
+    if (nativeKind)
+      await window.studio
+        .openEditor("pattern", p.id)
+        .catch((e) => setError(cleanError(e)));
+    else openView({ kind: "pattern", id: p.id });
+    setStatus("已创建独立 Pattern；原片段采样保持只读");
+  }
   function playPause() {
     if (!project) return;
     if (transport.status === "playing" || transport.status === "loading")
@@ -237,13 +279,13 @@ export function App() {
   function sourceMenu(s: Source, x: number, y: number) {
     if (!project) return;
     setSource(s);
-    const obj =
-      s.kind === "pattern"
-        ? project.patterns.find((p) => p.id === s.id)
-        : project.samples.find((v) => v.id === s.id);
+    const obj = getSource(project, s);
     if (!obj) return;
     showMenu(x, y, [
-      { label: "打开编辑实例", action: () => openView(s) },
+      {
+        label: s.kind === "phrase" ? "打开只读预览" : "打开编辑实例",
+        action: () => openView(s),
+      },
       {
         label: "弹出为桌面窗口",
         action: () =>
@@ -262,7 +304,9 @@ export function App() {
               void run(
                 s.kind === "pattern"
                   ? { type: "pattern:update", id: s.id, patch: { name } }
-                  : { type: "sample:update", id: s.id, patch: { name } },
+                  : s.kind === "phrase"
+                    ? { type: "phrase:update", id: s.id, patch: { name } }
+                    : { type: "sample:update", id: s.id, patch: { name } },
               ),
           ),
       },
@@ -280,14 +324,17 @@ export function App() {
             void run(
               s.kind === "pattern"
                 ? { type: "pattern:update", id: s.id, patch: { color } }
-                : { type: "sample:update", id: s.id, patch: { color } },
+                : s.kind === "phrase"
+                  ? { type: "phrase:update", id: s.id, patch: { color } }
+                  : { type: "sample:update", id: s.id, patch: { color } },
             ),
         })),
       },
       {
-        label: "创建独立副本",
+        label: s.kind === "phrase" ? "根据采样创建 Pattern" : "创建独立副本",
         action: () => {
           if (s.kind === "pattern") void createPattern(s.id);
+          else if (s.kind === "phrase") void patternFromPhrase(s.id);
           else
             void run({ type: "sample:clone", id: s.id }).then((r) => {
               if (r)
@@ -295,6 +342,9 @@ export function App() {
             });
         },
       },
+      ...(s.kind === "pattern"
+        ? [{ label: "保存为片段采样", action: () => void freezePattern(s.id) }]
+        : []),
       { separator: true, label: "" },
       {
         label: "删除对象及引用",
@@ -316,7 +366,9 @@ export function App() {
                       void run(
                         s.kind === "pattern"
                           ? { type: "pattern:remove", id: s.id }
-                          : { type: "sample:remove", id: s.id },
+                          : s.kind === "phrase"
+                            ? { type: "phrase:remove", id: s.id }
+                            : { type: "sample:remove", id: s.id },
                       );
                       setInfo(null);
                     }}
@@ -376,10 +428,7 @@ export function App() {
       }
       if (e.key === "F2" && project) {
         e.preventDefault();
-        const obj =
-          source.kind === "pattern"
-            ? project.patterns.find((p) => p.id === source.id)
-            : project.samples.find((s) => s.id === source.id);
+        const obj = getSource(project, source);
         if (obj)
           requestText(
             "重命名",
@@ -388,7 +437,9 @@ export function App() {
               void run(
                 source.kind === "pattern"
                   ? { type: "pattern:update", id: source.id, patch: { name } }
-                  : { type: "sample:update", id: source.id, patch: { name } },
+                  : source.kind === "phrase"
+                    ? { type: "phrase:update", id: source.id, patch: { name } }
+                    : { type: "sample:update", id: source.id, patch: { name } },
               ),
           );
       }
@@ -404,10 +455,7 @@ export function App() {
         <span>正在载入工作区…</span>
       </div>
     );
-  const selectedObj =
-    source.kind === "pattern"
-      ? project.patterns.find((p) => p.id === source.id)
-      : project.samples.find((s) => s.id === source.id);
+  const selectedObj = getSource(project, source);
   const currentBar = ticksPerBar(project.meter),
     beat = 16 / +project.meter.split("/")[1],
     position = transport.tick;
@@ -432,13 +480,42 @@ export function App() {
     },
     { label: "导出乐器采样包…", action: () => void file("exportInstruments") },
     { separator: true, label: "" },
-    { label: "导入采样…", action: () => void file("importSample") },
+    { label: "导入 NBS 片段采样…", action: () => void file("importPhrase") },
+    { label: "导入音频资源…", action: () => void file("importSample") },
     {
       label: "导入 NBS 乐器 / ZIP…",
       action: () => void file("importInstruments"),
     },
   ];
   const renderEditor = (s: Source) => {
+    if (s.kind === "phrase") {
+      const phrase = project.phrases?.find((p) => p.id === s.id);
+      return phrase ? (
+        <PhrasePreview
+          key={phrase.id}
+          phrase={phrase}
+          tick={transport.scope === s.id ? transport.tick : undefined}
+          playing={transport.scope === s.id && transport.status === "playing"}
+          toggle={() => {
+            setSource(s);
+            setMode("source");
+            if (
+              transport.scope === s.id &&
+              (transport.status === "playing" || transport.status === "loading")
+            )
+              audio.pause();
+            else
+              void audio
+                .play(project, s.id)
+                .catch((e) => setError(cleanError(e)));
+          }}
+          stop={stop}
+          createPattern={() => void patternFromPhrase(s.id)}
+        />
+      ) : (
+        <div className="missing-source">片段采样已删除</div>
+      );
+    }
     if (s.kind === "pattern") {
       const p = project.patterns.find((p) => p.id === s.id);
       return p ? (
@@ -505,6 +582,8 @@ export function App() {
       <span className="source-icon" style={{ color }}>
         {s.kind === "pattern" ? (
           <Grid2X2 size={16} />
+        ) : s.kind === "phrase" ? (
+          <LockKeyhole size={16} />
         ) : (
           <AudioLines size={17} />
         )}
@@ -592,7 +671,11 @@ export function App() {
                 [
                   { label: "新建 Pattern", action: () => void createPattern() },
                   {
-                    label: "导入采样…",
+                    label: "导入 NBS 片段采样…",
+                    action: () => void file("importPhrase"),
+                  },
+                  {
+                    label: "导入音频资源…",
                     action: () => void file("importSample"),
                   },
                   {
@@ -688,7 +771,7 @@ export function App() {
                     label: "关于 NoteBlock Editor",
                     action: () =>
                       setInfo({
-                        title: "NoteBlock Editor 0.4.0",
+                        title: "NoteBlock Editor 0.5.0",
                         body: (
                           <p>
                             Windows 桌面编辑器 · 新工作区
@@ -719,7 +802,7 @@ export function App() {
             ))}
             <span className="spacer" />
             <span className="version-label">
-              NOTE<b>BLOCK</b> <small>0.4</small>
+              NOTE<b>BLOCK</b> <small>0.5</small>
             </span>
           </div>
           <header className="transport-bar">
@@ -919,7 +1002,13 @@ export function App() {
       {nativeKind && (
         <div className="native-bar">
           <Blocks size={15} />
-          <b>{nativeKind === "pattern" ? "Pattern" : "采样"} 编辑实例</b>
+          <b>
+            {nativeKind === "pattern"
+              ? "Pattern 编辑实例"
+              : nativeKind === "phrase"
+                ? "片段采样 · 只读预览"
+                : "音频资源实例"}
+          </b>
           <span className="spacer" />
           <button
             aria-label={transport.status === "playing" ? "暂停" : "播放"}
@@ -956,7 +1045,11 @@ export function App() {
                       action: () => void createPattern(),
                     },
                     {
-                      label: "导入采样…",
+                      label: "导入 NBS 片段采样…",
+                      action: () => void file("importPhrase"),
+                    },
+                    {
+                      label: "导入音频资源…",
                       action: () => void file("importSample"),
                     },
                     {
@@ -973,7 +1066,7 @@ export function App() {
               <Search size={13} />
               <input
                 aria-label="搜索对象"
-                placeholder="搜索 Pattern 或采样"
+                placeholder="搜索 Pattern、片段采样或音频"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -982,7 +1075,8 @@ export function App() {
               {[
                 ["all", "全部"],
                 ["pattern", "Pattern"],
-                ["sample", "采样"],
+                ["phrase", "采样"],
+                ["sample", "音频"],
               ].map(([key, name]) => (
                 <button
                   className={filter === key ? "selected" : ""}
@@ -994,7 +1088,7 @@ export function App() {
               ))}
             </div>
             <div className="browser-items">
-              {filter !== "sample" && (
+              {(filter === "all" || filter === "pattern") && (
                 <>
                   <div className="library-label">
                     <Grid2X2 size={12} />
@@ -1031,15 +1125,67 @@ export function App() {
                   )}
                 </>
               )}
-              {filter !== "pattern" && (
+              {(filter === "all" || filter === "phrase") && (
                 <>
                   <div className="library-label">
+                    <LockKeyhole size={12} />
+                    <span>片段采样</span>
+                    <small>{project.phrases?.length ?? 0}</small>
+                    <button
+                      aria-label="导入片段采样"
+                      title="导入 NBS 只读片段"
+                      onClick={() => void file("importPhrase")}
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                  {(project.phrases ?? [])
+                    .filter((p) =>
+                      p.name.toLowerCase().includes(query.toLowerCase()),
+                    )
+                    .map((p, i) =>
+                      listRow(
+                        { kind: "phrase", id: p.id },
+                        p.name,
+                        p.color,
+                        `只读 · ${p.length} ticks · ${p.notes.length} notes`,
+                        i,
+                      ),
+                    )}
+                  {!project.phrases?.length && (
+                    <div className="phrase-library-empty">
+                      <p>可复用的只读乐段</p>
+                      <small>
+                        导入 NBS，或把 Pattern / 编排选区保存为采样。
+                      </small>
+                      <button onClick={() => void file("importPhrase")}>
+                        导入 NBS 片段
+                      </button>
+                      <button
+                        disabled={source.kind !== "pattern" || !selectedObj}
+                        onClick={() => void freezePattern(source.id)}
+                      >
+                        保存所选 Pattern 为采样
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+              {(filter === "all" || filter === "sample") && (
+                <details
+                  className="audio-resource-library"
+                  open={filter === "sample" ? true : undefined}
+                >
+                  <summary>
+                    音频 / 乐器资源 <small>{project.samples.length}</small>
+                  </summary>
+                  <div className="library-label">
                     <AudioLines size={12} />
-                    <span>SAMPLES</span>
+                    <span>AUDIO RESOURCES</span>
                     <small>{project.samples.length}</small>
                     <button
-                      aria-label="导入采样"
-                      title="导入采样"
+                      aria-label="导入音频资源"
+                      title="导入音频资源"
                       onClick={() => void file("importSample")}
                     >
                       <Plus size={12} />
@@ -1057,12 +1203,12 @@ export function App() {
                         s.builtin
                           ? "原版 · 内置"
                           : s.dataUrl
-                            ? "项目采样"
-                            : "采样未关联",
+                            ? "项目音频"
+                            : "音频未关联",
                         i,
                       ),
                     )}
-                </>
+                </details>
               )}
             </div>
             <div className="browser-selected">
@@ -1072,6 +1218,8 @@ export function App() {
               >
                 {source.kind === "pattern" ? (
                   <Grid2X2 size={20} />
+                ) : source.kind === "phrase" ? (
+                  <LockKeyhole size={20} />
                 ) : (
                   <AudioLines size={22} />
                 )}
@@ -1081,12 +1229,16 @@ export function App() {
                 <small>
                   {source.kind === "pattern"
                     ? "PATTERN SOURCE"
-                    : "SAMPLE SOURCE"}
+                    : source.kind === "phrase"
+                      ? "只读片段采样"
+                      : "音频 / 乐器资源"}
                 </small>
               </div>
               <button
                 aria-label="打开所选对象"
-                title="新增编辑实例"
+                title={
+                  source.kind === "phrase" ? "打开只读预览" : "新增编辑实例"
+                }
                 disabled={!selectedObj}
                 onClick={() => openView(source)}
               >
@@ -1129,21 +1281,16 @@ export function App() {
                 report={setStatus}
               />
               {views
-                .filter((v) =>
-                  v.kind === "pattern"
-                    ? project.patterns.some((p) => p.id === v.sourceId)
-                    : project.samples.some((s) => s.id === v.sourceId),
+                .filter(
+                  (v) => !!getSource(project, { kind: v.kind, id: v.sourceId }),
                 )
                 .map((view) => (
                   <WindowFrame
                     key={view.id}
                     view={view}
                     title={
-                      (view.kind === "pattern"
-                        ? project.patterns.find((p) => p.id === view.sourceId)
-                            ?.name
-                        : project.samples.find((s) => s.id === view.sourceId)
-                            ?.name) ?? ""
+                      getSource(project, { kind: view.kind, id: view.sourceId })
+                        ?.name ?? ""
                     }
                     active={active === view.id}
                     onChange={(patch) =>
@@ -1215,14 +1362,14 @@ export function App() {
                 >
                   {view.kind === "pattern" ? (
                     <PianoIcon />
+                  ) : view.kind === "phrase" ? (
+                    <LockKeyhole size={12} />
                   ) : (
                     <AudioLines size={12} />
                   )}
                   <span>
-                    {(view.kind === "pattern"
-                      ? project.patterns.find((p) => p.id === view.sourceId)
-                      : project.samples.find((s) => s.id === view.sourceId)
-                    )?.name ?? "已删除"}
+                    {getSource(project, { kind: view.kind, id: view.sourceId })
+                      ?.name ?? "已删除"}
                   </span>
                 </button>
               ))}
@@ -1234,7 +1381,7 @@ export function App() {
       ) : (
         <div className="native-content">
           {renderEditor({
-            kind: nativeKind === "sample" ? "sample" : "pattern",
+            kind: nativeSourceKind,
             id: nativeId ?? "",
           })}
         </div>
@@ -1265,7 +1412,7 @@ export function App() {
               : "READY"}
         </span>
         <span>
-          {project.patterns
+          {[...project.patterns, ...(project.phrases ?? [])]
             .reduce((a, p) => a + p.notes.length, 0)
             .toLocaleString()}{" "}
           NOTES

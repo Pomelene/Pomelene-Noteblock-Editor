@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Pencil,
+  Paintbrush,
+  Eraser,
+  VolumeX,
+  MoveHorizontal,
+  Scan,
   MousePointer2,
   Copy,
   Scissors,
@@ -12,7 +17,21 @@ import {
 } from "lucide-react";
 import { ticksPerBar, type Project, type Clip } from "../../shared/model";
 import type { Run, ShowMenu, RequestText, Source } from "./ui";
-import { snapTick, resizeClip } from "./editing";
+import { resizeClip } from "./editing";
+import { SnapPicker } from "./SnapPicker";
+import {
+  snapPosition,
+  snapUnit,
+  snapDelta,
+  gridTicks,
+  type SnapId,
+} from "./snap";
+import {
+  BrushStroke,
+  captureGesture,
+  clipEdge,
+  segmentIntersectsRect,
+} from "./gestures";
 import { audio } from "./audio";
 
 const LEFT = 160,
@@ -45,11 +64,14 @@ export function Playlist({
     canvas = useRef<HTMLCanvasElement>(null);
   const [view, setView] = useState({ w: 1000, h: 600, x: 0, y: 0 }),
     [zoom, setZoom] = useState(11),
-    [snap, setSnap] = useState(1),
+    [snap, setSnap] = useState<SnapId>("auto"),
     [tool, setTool] = useState("draw");
   const [ids, setIds] = useState<string[]>([]),
     [cursor, setCursor] = useState(0),
     [clipboard, setClipboard] = useState<Omit<Clip, "id">[]>([]);
+  const cancelGesture = useRef<(() => void) | null>(null);
+  const [erased, setErased] = useState<string[]>([]),
+    [feedback, setFeedback] = useState("");
   const [ghost, setGhost] = useState<Clip[]>([]),
     [box, setBox] = useState<{
       x: number;
@@ -62,9 +84,12 @@ export function Playlist({
   >({});
   useEffect(() => {
     let disposed = false;
-    for (const id of new Set(
-      project.clips.filter((c) => c.kind === "sample").map((c) => c.sourceId),
-    )) {
+    for (const id of new Set([
+      ...project.clips
+        .filter((c) => c.kind === "sample")
+        .map((c) => c.sourceId),
+      ...(source.kind === "sample" ? [source.id] : []),
+    ])) {
       void Promise.all([
         audio.getSamplePeaks(project, id),
         audio.getSampleDuration(project, id),
@@ -78,9 +103,11 @@ export function Playlist({
     return () => {
       disposed = true;
     };
-  }, [project.samples, project.clips]);
+  }, [project.samples, project.clips, source.kind, source.id]);
   const bar = ticksPerBar(project.meter),
-    unit = snap === -1 ? bar : snap;
+    unit = snapUnit(snap, zoom, bar);
+  const atTick = (tick: number, alt = false) =>
+    snapPosition(tick, snap, zoom, bar, alt);
   const selected = project.clips.filter((c) => ids.includes(c.id)),
     first = selected[0];
   const content = Math.max(
@@ -90,7 +117,17 @@ export function Playlist({
   const sourceInfo = (c: Pick<Clip, "kind" | "sourceId">) =>
     c.kind === "pattern"
       ? project.patterns.find((p) => p.id === c.sourceId)
-      : project.samples.find((s) => s.id === c.sourceId);
+      : c.kind === "phrase"
+        ? project.phrases?.find((p) => p.id === c.sourceId)
+        : project.samples.find((s) => s.id === c.sourceId);
+  useEffect(() => {
+    cancelGesture.current?.();
+    setIds([]);
+    return () => cancelGesture.current?.();
+  }, [project.id]);
+  useEffect(() => {
+    cancelGesture.current?.();
+  }, [project]);
   useEffect(() => {
     const el = scroller.current!;
     const ro = new ResizeObserver(() =>
@@ -118,7 +155,9 @@ export function Playlist({
       .reverse()
       .find(
         (c) =>
-          c.track === p.track && p.tick >= c.tick && p.tick < c.tick + c.length,
+          c.track === p.track &&
+          p.tick >= c.tick &&
+          p.tick <= c.tick + c.length + 3 / zoom,
       );
   };
   useEffect(() => {
@@ -146,14 +185,22 @@ export function Playlist({
     }
     const from = Math.floor(view.x / zoom),
       to = Math.ceil((view.x + view.w) / zoom),
-      stride = zoom < 8 ? 4 : 1;
-    for (let t = Math.floor(from / stride) * stride; t <= to; t += stride) {
+      lines = gridTicks(from, to, snap, zoom, bar);
+    for (const t of lines) {
       const x = LEFT + t * zoom - view.x;
       ctx.fillStyle =
-        t % bar === 0 ? "#485159" : t % 4 === 0 ? "#343e46" : "#2a333b";
+        Math.abs(t / bar - Math.round(t / bar)) < 1e-6
+          ? "#485159"
+          : Math.abs(t / 4 - Math.round(t / 4)) < 1e-6
+            ? "#343e46"
+            : "#2a333b";
       ctx.fillRect(x, TOP, 1, view.h);
     }
-    for (const original of project.clips) {
+    for (const original of [
+      ...project.clips,
+      ...ghost.filter((g) => !project.clips.some((c) => c.id === g.id)),
+    ]) {
+      if (erased.includes(original.id)) continue;
       const c = ghost.find((g) => g.id === original.id) ?? original,
         info = sourceInfo(c);
       if (!info) continue;
@@ -181,11 +228,18 @@ export function Playlist({
         y + 9,
         Math.max(1, w - 12),
       );
-      if (c.kind === "pattern") {
-        const pattern = project.patterns.find((p) => p.id === c.sourceId)!;
+      if (c.kind !== "sample") {
+        const pattern =
+          c.kind === "phrase"
+            ? project.phrases!.find((p) => p.id === c.sourceId)!
+            : project.patterns.find((p) => p.id === c.sourceId)!;
         ctx.fillStyle = color;
         for (const n of pattern.notes) {
-          if (n.tick < c.offset || n.tick >= c.offset + c.length) continue;
+          if (
+            n.tick < c.offset ||
+            n.tick >= Math.min(pattern.length, c.offset + c.length)
+          )
+            continue;
           const nx = x + (n.tick - c.offset) * zoom + 4;
           if (nx < LEFT || nx > view.w) continue;
           ctx.fillRect(
@@ -298,14 +352,15 @@ export function Playlist({
       ctx.lineTo(x, 7);
       ctx.fill();
     }
-  }, [project, view, zoom, tick, ids, ghost, box, waveforms]);
-  async function copy(cut = false) {
+  }, [project, view, zoom, snap, tick, ids, ghost, box, waveforms, erased]);
+  async function copy(cut = false, chosen = ids) {
+    const selected = project.clips.filter((c) => chosen.includes(c.id));
     if (!selected.length) return;
     const start = Math.min(...selected.map((c) => c.tick));
     setClipboard(
       selected.map(({ id, ...c }) => ({ ...c, tick: c.tick - start })),
     );
-    if (cut) await run({ type: "clips:remove", ids });
+    if (cut) await run({ type: "clips:remove", ids: chosen });
     report(`已${cut ? "剪切" : "复制"} ${selected.length} 个引用`);
   }
   async function paste() {
@@ -322,11 +377,11 @@ export function Playlist({
     const chosen = ids.includes(c.id) ? ids : [c.id];
     menu(x, y, [
       {
-        label: "打开编辑器",
+        label: c.kind === "phrase" ? "打开只读预览" : "打开编辑器",
         action: () => open({ kind: c.kind, id: c.sourceId }),
       },
       {
-        label: "创建独立副本",
+        label: c.kind === "phrase" ? "根据采样创建 Pattern" : "创建独立副本",
         action: () => void run({ type: "source:unique", clipId: c.id }),
       },
       {
@@ -339,25 +394,63 @@ export function Playlist({
             patch: { muted: !c.muted },
           }),
       },
+      {
+        label: "保存选区为片段采样",
+        action: () => void run({ type: "phrase:fromClips", ids: chosen }),
+      },
       { separator: true, label: "" },
       {
         label: "复制",
         shortcut: "Ctrl+C",
-        action: () => {
-          const start = c.tick;
-          setClipboard(
-            project.clips
-              .filter((v) => chosen.includes(v.id))
-              .map(({ id, ...v }) => ({ ...v, tick: v.tick - start })),
-          );
-        },
+        action: () => void copy(false, chosen),
       },
+      {
+        label: "剪切",
+        shortcut: "Ctrl+X",
+        action: () => void copy(true, chosen),
+      },
+      {
+        label: "粘贴",
+        shortcut: "Ctrl+V",
+        disabled: !clipboard.length,
+        action: () => void paste(),
+      },
+      {
+        label: "接续复制",
+        shortcut: "Ctrl+B",
+        action: () => duplicate(chosen),
+      },
+      {
+        label: "全选",
+        shortcut: "Ctrl+A",
+        action: () => setIds(project.clips.map((v) => v.id)),
+      },
+      { label: "取消选择", action: () => setIds([]) },
+      { label: "缩放适应内容", action: fit },
       {
         label: "删除引用",
         danger: true,
         action: () => void run({ type: "clips:remove", ids: chosen }),
       },
     ]);
+  }
+  function duplicate(chosen = ids) {
+    const clips = project.clips.filter((c) => chosen.includes(c.id));
+    if (!clips.length) return;
+    const start = Math.min(...clips.map((c) => c.tick)),
+      end = Math.max(...clips.map((c) => c.tick + c.length));
+    void run({
+      type: "clips:paste",
+      clips: clips.map(({ id, ...c }) => ({
+        ...c,
+        tick: c.tick + end - start,
+      })),
+    });
+  }
+  function fit() {
+    const end = Math.max(bar, ...project.clips.map((c) => c.tick + c.length));
+    setZoom(Math.max(4, Math.min(36, (view.w - LEFT - 24) / end)));
+    if (scroller.current) scroller.current.scrollLeft = 0;
   }
   return (
     <div
@@ -371,6 +464,23 @@ export function Playlist({
           return;
         const k = e.key.toLowerCase(),
           mod = e.ctrlKey || e.metaKey;
+        if (!mod && !e.altKey && ["p", "b", "e", "d", "t", "s"].includes(k)) {
+          e.preventDefault();
+          setTool(
+            {
+              p: "draw",
+              b: "brush",
+              e: "select",
+              d: "delete",
+              t: "mute",
+              s: "slip",
+            }[k]!,
+          );
+        }
+        if (e.key === "Escape") {
+          cancelGesture.current?.();
+          setIds([]);
+        }
         if (mod && ["a", "c", "x", "v", "b"].includes(k)) {
           e.preventDefault();
           e.stopPropagation();
@@ -420,9 +530,41 @@ export function Playlist({
             aria-label="编排绘制"
             className={tool === "draw" ? "selected" : ""}
             onClick={() => setTool("draw")}
-            title="绘制 / 拖动"
+            title="绘制 / 拖动 (P)"
           >
             <Pencil size={15} />
+          </button>
+          <button
+            aria-label="编排笔刷"
+            title="连续放置 (B)"
+            className={tool === "brush" ? "selected" : ""}
+            onClick={() => setTool("brush")}
+          >
+            <Paintbrush size={15} />
+          </button>
+          <button
+            aria-label="编排删除"
+            title="连续删除 (D)"
+            className={tool === "delete" ? "selected" : ""}
+            onClick={() => setTool("delete")}
+          >
+            <Eraser size={15} />
+          </button>
+          <button
+            aria-label="编排静音"
+            title="切换引用静音 (T)"
+            className={tool === "mute" ? "selected" : ""}
+            onClick={() => setTool("mute")}
+          >
+            <VolumeX size={15} />
+          </button>
+          <button
+            aria-label="编排滑移"
+            title="滑移源内容 (S)"
+            className={tool === "slip" ? "selected" : ""}
+            onClick={() => setTool("slip")}
+          >
+            <MoveHorizontal size={15} />
           </button>
           <button
             aria-label="编排选择"
@@ -433,18 +575,7 @@ export function Playlist({
             <MousePointer2 size={15} />
           </button>
         </div>
-        <select
-          aria-label="编排吸附"
-          value={snap}
-          onChange={(e) => setSnap(+e.target.value)}
-        >
-          <option value={0.5}>1/2 tick</option>
-          <option value={1 / 3}>三连音</option>
-          <option value={1}>1 tick</option>
-          <option value={2}>1/2 拍</option>
-          <option value={4}>1 拍</option>
-          <option value={-1}>1 小节</option>
-        </select>
+        <SnapPicker label="编排吸附" value={snap} onChange={setSnap} />
         <span className="divider" />
         <button
           title="复制 Ctrl+C"
@@ -514,6 +645,9 @@ export function Playlist({
           </>
         )}
         <span className="spacer" />
+        <button aria-label="编排适应内容" title="缩放适应内容" onClick={fit}>
+          <Scan size={14} />
+        </button>
         <button
           aria-label="缩小编排"
           disabled={zoom <= 4}
@@ -625,7 +759,7 @@ export function Playlist({
             const r = canvas.current!.getBoundingClientRect(),
               p = point(e.clientX - r.left, e.clientY - r.top);
             if (p.track < 0 || p.track >= project.tracks.length) return;
-            place(data, snapTick(p.tick, unit, e.altKey), p.track);
+            place(data, atTick(p.tick, e.altKey), p.track);
           } catch {
             report("拖入项目中的 Pattern 或采样来编排");
           }
@@ -652,13 +786,33 @@ export function Playlist({
                 c = hit(e.clientX - r.left, e.clientY - r.top);
               if (c) open({ kind: c.kind, id: c.sourceId });
             }}
+            onPointerMove={(e) => {
+              if (e.buttons) return;
+              const r = e.currentTarget.getBoundingClientRect(),
+                x = e.clientX - r.left,
+                y = e.clientY - r.top,
+                c = hit(x, y);
+              e.currentTarget.style.cursor =
+                c &&
+                clipEdge(
+                  x,
+                  LEFT + c.tick * zoom - view.x,
+                  LEFT + (c.tick + c.length) * zoom - view.x,
+                )
+                  ? "ew-resize"
+                  : tool === "delete"
+                    ? "not-allowed"
+                    : tool === "select"
+                      ? "crosshair"
+                      : "default";
+            }}
             onPointerDown={(e) => {
               const el = e.currentTarget,
                 r = el.getBoundingClientRect(),
                 x = e.clientX - r.left,
-                y = e.clientY - r.top;
+                y = e.clientY - r.top,
+                p = point(x, y);
               el.closest<HTMLElement>(".playlist")?.focus();
-              const p = point(x, y);
               if (x < LEFT) {
                 if (
                   e.button === 0 &&
@@ -676,97 +830,255 @@ export function Playlist({
               }
               if (y < TOP) {
                 if (e.button === 0) {
-                  const at = snapTick(p.tick, unit, e.altKey);
+                  const at = atTick(p.tick, e.altKey);
                   setCursor(at);
                   seek(at);
                 }
                 return;
               }
               if (
-                p.track < 0 ||
-                p.track >= project.tracks.length ||
-                project.tracks[p.track].locked
+                !project.tracks[p.track] ||
+                project.tracks[p.track].locked ||
+                ![0, 2].includes(e.button)
               )
                 return;
-              const c = hit(x, y);
-              if (e.button === 2) {
-                if (c) void run({ type: "clips:remove", ids: [c.id] });
+              cancelGesture.current?.();
+              e.preventDefault();
+              const c = hit(x, y),
+                at = atTick(p.tick, e.altKey);
+              setCursor(at);
+              const start = (
+                move: (v: PointerEvent) => void,
+                up: (v: PointerEvent) => void,
+              ) => {
+                cancelGesture.current = captureGesture(
+                  el,
+                  e.pointerId,
+                  move,
+                  up,
+                  () => {
+                    setGhost([]);
+                    setErased([]);
+                    setBox(null);
+                    setFeedback("");
+                    cancelGesture.current = null;
+                  },
+                );
+              };
+              const edge = c
+                ? clipEdge(
+                    x,
+                    LEFT + c.tick * zoom - view.x,
+                    LEFT + (c.tick + c.length) * zoom - view.x,
+                  )
+                : undefined;
+              if (e.button === 2 || tool === "delete") {
+                const removed = new Set<string>();
+                let previous = { x: p.tick, y: p.track + 0.5 };
+                const erase = (v: { clientX: number; clientY: number }) => {
+                  const current = point(v.clientX - r.left, v.clientY - r.top),
+                    end = { x: current.tick, y: current.track + 0.5 };
+                  for (const clip of project.clips)
+                    if (
+                      !project.tracks[clip.track]?.locked &&
+                      segmentIntersectsRect(previous, end, {
+                        x: clip.tick,
+                        y: clip.track,
+                        w: clip.length,
+                        h: 1,
+                      })
+                    )
+                      removed.add(clip.id);
+                  previous = end;
+                  setErased([...removed]);
+                  setFeedback(`删除 ${removed.size} 个引用 · 松开提交`);
+                };
+                erase(e);
+                start(erase, (up) => {
+                  erase(up);
+                  if (removed.size)
+                    void run({ type: "clips:remove", ids: [...removed] });
+                });
                 return;
               }
-              if (e.button !== 0) return;
-              const at = snapTick(p.tick, unit, e.altKey);
-              setCursor(at);
-              el.setPointerCapture(e.pointerId);
-              const clear = () => {
-                el.onpointermove = null;
-                el.onpointerup = null;
-                el.onpointercancel = null;
-                setGhost([]);
-                setBox(null);
-              };
-              el.onpointercancel = clear;
+              if (e.ctrlKey || tool === "select") {
+                if (c && e.ctrlKey) {
+                  setIds(
+                    ids.includes(c.id)
+                      ? ids.filter((id) => id !== c.id)
+                      : [...ids, c.id],
+                  );
+                  return;
+                }
+                start(
+                  (move) =>
+                    setBox({
+                      x: Math.min(x, move.clientX - r.left),
+                      y: Math.min(y, move.clientY - r.top),
+                      w: Math.abs(move.clientX - r.left - x),
+                      h: Math.abs(move.clientY - r.top - y),
+                    }),
+                  (up) => {
+                    const end = point(up.clientX - r.left, up.clientY - r.top),
+                      found = project.clips
+                        .filter(
+                          (v) =>
+                            v.tick + v.length >= Math.min(p.tick, end.tick) &&
+                            v.tick <= Math.max(p.tick, end.tick) &&
+                            v.track >= Math.min(p.track, end.track) &&
+                            v.track <= Math.max(p.track, end.track),
+                        )
+                        .map((v) => v.id);
+                    setIds(
+                      e.ctrlKey ? [...new Set([...ids, ...found])] : found,
+                    );
+                  },
+                );
+                return;
+              }
+              if (c && tool === "mute") {
+                void run({
+                  type: "clips:update",
+                  ids: [c.id],
+                  patch: { muted: !c.muted },
+                });
+                return;
+              }
+              const brush = tool === "brush" || (!c && e.shiftKey);
+              if (brush || !c) {
+                if (tool === "slip" || tool === "mute") return;
+                const info = sourceInfo({
+                  kind: source.kind,
+                  sourceId: source.id,
+                });
+                if (!info) return;
+                const length =
+                  source.kind === "sample"
+                    ? Math.max(
+                        1 / 24,
+                        (((waveforms[source.id]?.duration ??
+                          project.samples.find((s) => s.id === source.id)
+                            ?.duration ??
+                          0) *
+                          project.bpm) /
+                          60) *
+                          4,
+                      )
+                    : (info as { length: number }).length;
+                if (source.kind === "sample" && length <= 1 / 24) {
+                  report("音频正在加载，请稍后放置");
+                  return;
+                }
+                const stroke = new BrushStroke(length, at);
+                let pending: Clip[] = [];
+                const paint = (v: {
+                  clientX: number;
+                  clientY: number;
+                  altKey: boolean;
+                }) => {
+                  const q = point(v.clientX - r.left, v.clientY - r.top);
+                  if (brush) {
+                    const cells = stroke.visit(at + q.tick - p.tick, q.track);
+                    if (stroke.exceeded) {
+                      pending = [];
+                      setGhost([]);
+                      setFeedback("手势超过 10,000 个位置，已取消；请分段放置");
+                      return;
+                    }
+                    for (const cell of cells) {
+                      if (
+                        cell.tick < 0 ||
+                        !project.tracks[cell.row] ||
+                        project.tracks[cell.row].locked
+                      )
+                        continue;
+                      if (
+                        project.clips.some(
+                          (v) =>
+                            v.kind === source.kind &&
+                            v.sourceId === source.id &&
+                            v.track === cell.row &&
+                            Math.abs(v.tick - cell.tick) < 1e-7,
+                        )
+                      )
+                        continue;
+                      pending.push({
+                        id: `preview-${pending.length}`,
+                        kind: source.kind,
+                        sourceId: source.id,
+                        tick: cell.tick,
+                        track: cell.row,
+                        length,
+                        offset: 0,
+                        muted: false,
+                      });
+                    }
+                  } else if (
+                    project.tracks[q.track] &&
+                    !project.tracks[q.track].locked
+                  )
+                    pending = [
+                      {
+                        id: "preview-new",
+                        kind: source.kind,
+                        sourceId: source.id,
+                        tick: atTick(q.tick, v.altKey),
+                        track: q.track,
+                        length,
+                        offset: 0,
+                        muted: false,
+                      },
+                    ];
+                  setGhost([...pending]);
+                  setFeedback(
+                    `${brush ? "笔刷" : "放置"} ${pending.length} 个引用 · 松开提交`,
+                  );
+                };
+                paint(e);
+                start(paint, (up) => {
+                  paint(up);
+                  if (pending.length)
+                    void run({
+                      type: "clips:paste",
+                      clips: pending.map(({ id, ...v }) => v),
+                    }).then((result) => {
+                      if (result)
+                        setIds(
+                          result.project.clips
+                            .slice(-pending.length)
+                            .map((v) => v.id),
+                        );
+                    });
+                });
+                return;
+              }
               if (
-                c &&
+                !edge &&
                 y - (TOP + c.track * ROW - view.y + 4) < 18 &&
-                x - (LEFT + c.tick * zoom - view.x) < 16
+                x - (LEFT + c.tick * zoom - view.x) < 24
               ) {
                 clipMenu(c, e.clientX, e.clientY);
-                clear();
                 return;
               }
-              if (!c && (tool === "select" || e.shiftKey || e.ctrlKey)) {
-                el.onpointermove = (move) =>
-                  setBox({
-                    x: Math.min(x, move.clientX - r.left),
-                    y: Math.min(y, move.clientY - r.top),
-                    w: Math.abs(move.clientX - r.left - x),
-                    h: Math.abs(move.clientY - r.top - y),
-                  });
-                el.onpointerup = (up) => {
-                  const end = point(up.clientX - r.left, up.clientY - r.top);
-                  const found = project.clips
-                    .filter(
-                      (c) =>
-                        c.tick + c.length >= Math.min(p.tick, end.tick) &&
-                        c.tick <= Math.max(p.tick, end.tick) &&
-                        c.track >= Math.min(p.track, end.track) &&
-                        c.track <= Math.max(p.track, end.track),
-                    )
-                    .map((c) => c.id);
-                  setIds(e.ctrlKey ? [...new Set([...ids, ...found])] : found);
-                  clear();
-                };
-                return;
-              }
-              if (!c) {
-                place(source, at, p.track);
-                clear();
-                return;
-              }
-              const right = LEFT + (c.tick + c.length) * zoom - view.x,
-                left = LEFT + c.tick * zoom - view.x,
-                edge =
-                  Math.abs(x - right) < 7
-                    ? "right"
-                    : Math.abs(x - left) < 5
-                      ? "left"
-                      : undefined;
-              const selectedIds = e.ctrlKey
-                ? ids.includes(c.id)
-                  ? ids.filter((id) => id !== c.id)
-                  : [...ids, c.id]
-                : ids.includes(c.id)
-                  ? ids
-                  : [c.id];
+              const selectedIds =
+                edge || tool === "slip"
+                  ? [c.id]
+                  : ids.includes(c.id)
+                    ? ids
+                    : [c.id];
               setIds(selectedIds);
-              const originals = project.clips.filter((c) =>
-                  selectedIds.includes(c.id),
+              const originals = project.clips.filter((v) =>
+                  selectedIds.includes(v.id),
                 ),
-                sx = e.clientX,
-                sy = e.clientY;
+                copyDrag = e.shiftKey;
               const change = (event: PointerEvent) => {
-                const step = event.altKey ? 1 / 24 : unit,
-                  d = Math.round((event.clientX - sx) / zoom / step) * step;
+                let d = snapDelta(
+                  (event.clientX - e.clientX) / zoom,
+                  snap,
+                  zoom,
+                  bar,
+                  event.altKey,
+                );
                 if (edge)
                   return [
                     resizeClip(
@@ -775,48 +1087,85 @@ export function Playlist({
                       (edge === "right" ? c.tick + c.length : c.tick) + d,
                     ),
                   ];
-                const dr = Math.round((event.clientY - sy) / ROW);
-                return originals.map((c) => ({
-                  ...c,
-                  tick: c.tick + d,
-                  track: c.track + dr,
+                if (tool === "slip")
+                  return [{ ...c, offset: Math.max(0, c.offset - d) }];
+                d = Math.max(-Math.min(...originals.map((v) => v.tick)), d);
+                const dr = Math.max(
+                  -Math.min(...originals.map((v) => v.track)),
+                  Math.min(
+                    project.tracks.length -
+                      1 -
+                      Math.max(...originals.map((v) => v.track)),
+                    Math.round((event.clientY - e.clientY) / ROW),
+                  ),
+                );
+                return originals.map((v) => ({
+                  ...v,
+                  tick: v.tick + d,
+                  track: v.track + dr,
                 }));
               };
-              el.onpointermove = (move) => setGhost(change(move));
-              el.onpointerup = (up) => {
-                const next = change(up);
-                if (edge) {
-                  const v = next[0];
-                  if (v.tick !== c.tick || v.length !== c.length)
-                    void run({
-                      type: "clips:update",
-                      ids: [c.id],
-                      patch: {
-                        tick: v.tick,
-                        length: v.length,
-                        offset: v.offset,
-                      },
-                    });
-                } else if (next.length) {
-                  const dt = next[0].tick - originals[0].tick,
-                    dr = next[0].track - originals[0].track;
-                  if (dt || dr) {
-                    if (up.shiftKey)
+              start(
+                (move) => {
+                  const next = change(move);
+                  setGhost(next);
+                  if (edge) {
+                    const v = next[0],
+                      info = sourceInfo(v),
+                      sourceLength =
+                        v.kind === "sample"
+                          ? (((waveforms[v.sourceId]?.duration ?? 0) *
+                              project.bpm) /
+                              60) *
+                            4
+                          : ((info as { length: number } | undefined)?.length ??
+                            0);
+                    setFeedback(
+                      `长度 ${Number(v.length.toFixed(3))} tick · 补白 ${Number(Math.max(0, v.length + v.offset - sourceLength).toFixed(3))} tick`,
+                    );
+                  } else if (tool === "slip")
+                    setFeedback(
+                      `源偏移 ${Number(next[0].offset.toFixed(3))} tick`,
+                    );
+                },
+                (up) => {
+                  const next = change(up),
+                    v = next[0];
+                  if (edge || tool === "slip") {
+                    if (
+                      v.tick !== c.tick ||
+                      v.length !== c.length ||
+                      v.offset !== c.offset
+                    )
                       void run({
-                        type: "clips:paste",
-                        clips: next.map(({ id, ...c }) => c),
+                        type: "clips:update",
+                        ids: [c.id],
+                        patch: {
+                          tick: v.tick,
+                          length: v.length,
+                          offset: v.offset,
+                        },
                       });
-                    else
-                      void run({
-                        type: "clips:move",
-                        ids: selectedIds,
-                        ticks: dt,
-                        tracks: dr,
-                      });
+                  } else if (next.length) {
+                    const dt = v.tick - originals[0].tick,
+                      dr = v.track - originals[0].track;
+                    if (dt || dr) {
+                      if (copyDrag)
+                        void run({
+                          type: "clips:paste",
+                          clips: next.map(({ id, ...clip }) => clip),
+                        });
+                      else
+                        void run({
+                          type: "clips:move",
+                          ids: selectedIds,
+                          ticks: dt,
+                          tracks: dr,
+                        });
+                    }
                   }
-                }
-                clear();
-              };
+                },
+              );
             }}
           />
         </div>
@@ -825,24 +1174,23 @@ export function Playlist({
         <span>
           {ids.length
             ? `${ids.length} 个引用已选`
-            : "左键放置 · 右键删除 · Ctrl 框选 · Shift 拖动复制"}
+            : "P 绘制 · B 连续笔刷 · 右键擦除 · Ctrl 框选 · Shift 拖动复制"}
         </span>
         <span>位置 {Number(cursor.toFixed(3))} tick</span>
         <span className="spacer" />
-        <span>边缘调整：补空白 / 裁剪</span>
+        <span className={feedback ? "gesture-feedback" : ""} role="status">
+          {feedback || "拖动边缘补白 / 裁剪 · Alt 自由定位"}
+        </span>
       </div>
     </div>
   );
   async function place(s: Source, at: number, track: number) {
-    const info =
-      s.kind === "pattern"
-        ? project.patterns.find((p) => p.id === s.id)
-        : project.samples.find((p) => p.id === s.id);
+    const info = sourceInfo({ kind: s.kind, sourceId: s.id });
     if (!info) return;
     try {
       const length =
-        s.kind === "pattern"
-          ? project.patterns.find((p) => p.id === s.id)!.length
+        s.kind !== "sample"
+          ? (info as { length: number }).length
           : Math.max(
               1 / 24,
               (((await audio.getSampleDuration(project, s.id)) * project.bpm) /

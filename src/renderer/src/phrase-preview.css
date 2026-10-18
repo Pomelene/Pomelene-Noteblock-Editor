@@ -1,0 +1,103 @@
+.phrase-preview {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+.phrase-preview-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.phrase-preview-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  font-size: 12px;
+}
+.readonly-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 5px;
+  padding: 4px 6px;
+  background: #c5b59c18;
+  border: 1px solid #b5a68f55;
+  color: #d0c1aa;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.phrase-preview-toolbar .phrase-convert {
+  color: #c7e1d4;
+  border-color: #78998a;
+}
+.phrase-readonly-hint {
+  margin: 0;
+  padding: 7px 11px;
+  color: #b6c3c9;
+  line-height: 1.5;
+  font-size: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.phrase-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+}
+.phrase-scroll canvas {
+  display: block;
+}
+.phrase-preview-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 25px;
+  padding: 5px 10px;
+  color: #a2b4be;
+  font-size: 11px;
+  border-top: 1px solid var(--line);
+}
+.phrase-library-empty {
+  margin: 2px 5px 8px;
+  padding: 10px;
+  border: 1px dashed #697c85;
+  border-radius: 3px;
+  color: #b6c4cc;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.phrase-library-empty p {
+  margin: 0 0 3px;
+  color: #cbd6dc;
+}
+.phrase-library-empty small {
+  display: block;
+  font-size: 11px;
+}
+.phrase-library-empty button {
+  margin-top: 8px;
+  width: 100%;
+  min-height: 28px;
+  font-size: 11px;
+}
+.audio-resource-library {
+  border-top: 1px solid var(--line);
+  margin: 10px 2px 0;
+}
+.audio-resource-library > summary {
+  color: #aab9c2;
+  font-size: 11px;
+  padding: 10px 7px;
+  cursor: pointer;
+}
+.audio-resource-library > summary small {
+  float: right;
+  color: #879ca9;
+}

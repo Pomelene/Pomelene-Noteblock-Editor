@@ -315,7 +315,7 @@ export class AudioEngine {
         ),
       );
       if (generation !== this.generation) return;
-      if (scope !== "song" && !project.patterns.some((p) => p.id === scope)) {
+      if (scope !== "song" && project.samples.some((s) => s.id === scope)) {
         plan.endTick = buffers.get(scope)!.duration / plan.secondsPerTick;
         plan.events[0].durationTicks = plan.endTick;
       }

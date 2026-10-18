@@ -51,6 +51,11 @@ async function drag(locator, from, to) {
       BrowserWindow.getAllWindows()[0].show(),
     );
     await page.waitForSelector(".studio");
+    // Keep this baseline's pixel coordinates on the original one-tick grid;
+    // the new adaptive/triplet/free modes have dedicated interaction tests.
+    await page
+      .getByLabel("编排吸附", { exact: true })
+      .selectOption("quarter-beat");
     await app.evaluate(({ dialog }) => {
       globalThis.testOpen = [];
       globalThis.testSave = [];
@@ -300,6 +305,7 @@ async function drag(locator, from, to) {
     await check(
       "sample editor renders decoded PCM rather than a decorative waveform",
       async () => {
+        await page.locator(".audio-resource-library > summary").click();
         await page.getByTestId("source-vanilla-0").dblclick();
         await expect(page.getByLabel("实际采样波形")).toBeVisible();
         assert.equal(

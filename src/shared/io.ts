@@ -206,7 +206,7 @@ export function toNbs(input: Project): {
   const lanes = new Map<string, number>(),
     claimedOriginal = new Set<number>();
   if (
-    project.patterns.some((p) =>
+    [...project.patterns, ...(project.phrases ?? [])].some((p) =>
       p.layers.some((l) => l.sourceIndex !== undefined),
     )
   )
@@ -218,7 +218,9 @@ export function toNbs(input: Project): {
       omittedSamples = true;
       continue;
     }
-    const source = project.patterns.find((p) => p.id === c.sourceId)!,
+    const source = (
+        c.kind === "phrase" ? (project.phrases ?? []) : project.patterns
+      ).find((p) => p.id === c.sourceId)!,
       layerSolo = source.layers.some((l) => l.solo);
     // Repeated references share lane settings. The codec still allocates
     // collision lanes when references overlap at the same tick.

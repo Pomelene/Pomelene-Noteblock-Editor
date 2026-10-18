@@ -72,6 +72,7 @@ export function createEmptyProject(): Project {
     bpm: 120,
     meter: "4/4",
     patterns: [],
+    phrases: [],
     samples,
     instruments: samples.map((s, id) => ({
       id,
@@ -271,6 +272,7 @@ export function validateProject(value: unknown): Project {
     fail("拍号无效");
   const samples = new Set<string | number>(),
     patterns = new Set<string | number>(),
+    phrases = new Set<string | number>(),
     tracks = new Set<string | number>(),
     instruments = new Set<string | number>();
   let embedded = 0;
@@ -306,9 +308,12 @@ export function validateProject(value: unknown): Project {
     bool(i.pressKey);
   }
   let notes = 0;
-  for (const raw of arr(p.patterns, 1024)) {
+  const patternArray = arr(p.patterns, 1024),
+    phraseArray = p.phrases === undefined ? [] : arr(p.phrases, 1024);
+  for (const raw of [...patternArray, ...phraseArray]) {
     const pattern = obj(raw);
     unique(pattern.id, patterns);
+    if (phraseArray.includes(raw)) phrases.add(pattern.id as string);
     str(pattern.name);
     str(pattern.color, 100);
     num(pattern.length, 1 / 1024, MAX_TICK);
@@ -341,6 +346,7 @@ export function validateProject(value: unknown): Project {
       if (n.finePitch !== undefined) num(n.finePitch, -32768, 32767, true);
     }
   }
+  for (const id of phrases) patterns.delete(id);
   const trackArray = arr(p.tracks, 256);
   if (!trackArray.length) fail("工程至少需要一条轨道");
   for (const raw of trackArray) {
@@ -356,8 +362,17 @@ export function validateProject(value: unknown): Project {
   for (const raw of arr(p.clips, 10_000)) {
     const c = obj(raw);
     unique(c.id, clipIds);
-    if (c.kind !== "pattern" && c.kind !== "sample") fail();
-    if (!(c.kind === "pattern" ? patterns : samples).has(str(c.sourceId, 128)))
+    if (c.kind !== "pattern" && c.kind !== "phrase" && c.kind !== "sample")
+      fail();
+    if (
+      !(
+        c.kind === "pattern"
+          ? patterns
+          : c.kind === "phrase"
+            ? phrases
+            : samples
+      ).has(str(c.sourceId, 128))
+    )
       fail("乐段引用的源不存在");
     num(c.tick, 0, MAX_TICK);
     num(c.length, 1 / 1024, MAX_TICK);
@@ -512,6 +527,93 @@ export class Session {
         return { pat, chosen };
       };
       switch (command.type) {
+        case "phrase:fromPattern": {
+          const copy = clonePattern(pattern(command.patternId));
+          copy.name = command.name ?? pattern(command.patternId).name;
+          (p.phrases ??= []).push(copy);
+          break;
+        }
+        case "phrase:fromClips": {
+          if (!command.ids.length) fail("请先选择音符片段");
+          const selected = [...new Set(command.ids)].map((id) =>
+            find(p.clips, id),
+          );
+          if (selected.some((c) => c.kind === "sample"))
+            fail("音频资源不能转换为音符片段采样");
+          const start = Math.min(...selected.map((c) => c.tick));
+          const copy: Pattern = {
+            id: uid(),
+            name: command.name ?? "选区片段采样",
+            color,
+            length: Math.max(...selected.map((c) => c.tick + c.length)) - start,
+            notes: [],
+            layers: [],
+          };
+          const trackSolo = p.tracks.some((t) => t.solo);
+          for (const clip of selected) {
+            const source =
+              clip.kind === "pattern"
+                ? pattern(clip.sourceId)
+                : find(p.phrases ?? [], clip.sourceId);
+            const firstLayer = copy.layers.length,
+              layerSolo = source.layers.some((l) => l.solo);
+            if (firstLayer + source.layers.length > 4096)
+              fail("选区图层数量超出限制");
+            const track = p.tracks[clip.track];
+            copy.layers.push(
+              ...source.layers.map((l) => ({
+                ...l,
+                id: uid(),
+                solo: false,
+                muted:
+                  l.muted ||
+                  (layerSolo && !l.solo) ||
+                  clip.muted ||
+                  track.muted ||
+                  (trackSolo && !track.solo),
+              })),
+            );
+            const notes = source.notes.filter(
+              (n) =>
+                n.tick >= clip.offset &&
+                n.tick < clip.offset + clip.length &&
+                n.tick < source.length,
+            );
+            if (copy.notes.length + notes.length > 100_000)
+              fail("选区音符数量超出限制");
+            copy.notes.push(
+              ...notes.map((n) => ({
+                ...n,
+                id: uid(),
+                tick: clip.tick - start + n.tick - clip.offset,
+                layer: firstLayer + n.layer,
+              })),
+            );
+          }
+          (p.phrases ??= []).push(copy);
+          break;
+        }
+        case "phrase:update": {
+          const patch = obj(command.patch);
+          if (
+            Object.keys(patch).some((key) => key !== "name" && key !== "color")
+          )
+            fail("片段采样只允许修改名称和颜色");
+          Object.assign(find(p.phrases ?? [], command.id), patch);
+          break;
+        }
+        case "phrase:remove":
+          find(p.phrases ?? [], command.id);
+          p.phrases = p.phrases!.filter((x) => x.id !== command.id);
+          p.clips = p.clips.filter(
+            (c) => c.kind !== "phrase" || c.sourceId !== command.id,
+          );
+          break;
+        case "pattern:fromPhrase": {
+          const source = find(p.phrases ?? [], command.phraseId);
+          p.patterns.push({ ...clonePattern(source), name: source.name });
+          break;
+        }
         case "import:restoreOriginal": {
           if (!p.importOrganization) fail("当前工程没有原始导入布局");
           let original: Record<string, unknown>;
@@ -526,9 +628,17 @@ export class Session {
           delete p.importOrganization;
           break;
         }
-        case "project:update":
-          Object.assign(p, command.patch);
+        case "project:update": {
+          const patch = obj(command.patch);
+          if (
+            Object.keys(patch).some(
+              (key) => !["title", "bpm", "meter", "loop"].includes(key),
+            )
+          )
+            fail("工程属性命令不能修改源对象或片段采样");
+          Object.assign(p, patch);
           break;
+        }
         case "pattern:add":
           p.patterns.push(
             command.duplicateId
@@ -657,9 +767,14 @@ export class Session {
           break;
         case "source:unique": {
           const c = editable(command.clipId);
-          if (c.kind === "pattern") {
-            const copy = clonePattern(pattern(c.sourceId));
+          if (c.kind === "pattern" || c.kind === "phrase") {
+            const copy = clonePattern(
+              c.kind === "pattern"
+                ? pattern(c.sourceId)
+                : find(p.phrases ?? [], c.sourceId),
+            );
             p.patterns.push(copy);
+            c.kind = "pattern";
             c.sourceId = copy.id;
           } else {
             const sample = structuredClone(find(p.samples, c.sourceId));

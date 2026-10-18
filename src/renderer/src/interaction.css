@@ -1,0 +1,32 @@
+.snap-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #b8c9cd;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.canvas-toolbar .snap-picker select,
+.editor-tools .snap-picker select {
+  width: 174px;
+  max-width: 174px;
+  min-width: 150px;
+  font-size: 11px;
+}
+.playlist canvas,
+.pattern-editor canvas {
+  touch-action: none;
+}
+.playlist > .canvas-toolbar,
+.pattern-editor > .editor-tools {
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.gesture-feedback {
+  color: #f0ca8c;
+  font-variant-numeric: tabular-nums;
+}
+.canvas-toolbar .inline-value {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

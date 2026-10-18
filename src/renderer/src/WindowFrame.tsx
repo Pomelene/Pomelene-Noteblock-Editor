@@ -18,7 +18,7 @@ import "./window.css";
 
 export interface EditorView {
   id: string;
-  kind: "pattern" | "sample";
+  kind: "pattern" | "phrase" | "sample";
   sourceId: string;
   x: number;
   y: number;
