@@ -2,6 +2,8 @@
 
 Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录是独立重构工程，旧版 `desktop` 保留。
 
+远端代码仓库：[Pomelene/NoteBlock-Editor](https://github.com/Pomelene/NoteBlock-Editor)（私有）。`main` 保存当前代码，版本标签保留已交付源码，`legacy/desktop-0.2` 保留旧工程提交历史。开发与本地文件保留规则见 [仓库与产物管理](docs/repository-and-retention.md)。
+
 采用源对象、编排引用、编辑视图三层模型。Pattern 是可编辑乐段，片段采样是只读的可复用音符快照，均可反复编排和打开多个内部或原生窗口。历史音频文件与乐器单音在“音频 / 乐器资源”中单独管理。主进程维护工程、历史及原生文件访问，音频通过 AudioContext 时钟调度并跨窗口协调。
 
 ## 已实现

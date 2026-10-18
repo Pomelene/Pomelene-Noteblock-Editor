@@ -2,3 +2,10 @@ node_modules/
 out/
 test-results/
 *.log
+release/
+deliverables/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
