@@ -6,6 +6,7 @@ import type {
   Note,
   Snapshot,
   StudioAPI,
+  ImportPrompt,
 } from "../shared/model";
 
 let generation: number | undefined;
@@ -21,6 +22,11 @@ const subscribe = <T>(channel: string, listener: (value: T) => void) => {
   };
 };
 const api: StudioAPI = {
+  onImportPrompt: (fn) =>
+    subscribe<ImportPrompt | null>("studio:importPrompt", fn),
+  respondImport: async (id, mode) => {
+    await ipcRenderer.invoke("studio:importChoice", { id, mode });
+  },
   getSnapshot: async () => capture(await ipcRenderer.invoke("studio:snapshot")),
   dispatch: async (command: Command, originGeneration?: number) =>
     capture(

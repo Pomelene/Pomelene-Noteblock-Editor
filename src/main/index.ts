@@ -11,6 +11,7 @@ import type {
 } from "../shared/model";
 import { Session } from "../shared/session";
 import { ProjectFiles } from "./files";
+import { ImportBroker } from "./importBroker";
 
 const here = dirname(fileURLToPath(import.meta.url)),
   rendererFile = resolve(here, "../renderer/index.html"),
@@ -18,6 +19,7 @@ const here = dirname(fileURLToPath(import.meta.url)),
 const session = new Session(),
   windows = new Set<BrowserWindow>(),
   editors = new Set<BrowserWindow>();
+const imports = new ImportBroker();
 let main: BrowserWindow | undefined,
   allowClose = false,
   closing = false;
@@ -27,6 +29,14 @@ let audioOwner:
 const files = new ProjectFiles({
   session,
   getWindow: () => BrowserWindow.getFocusedWindow() ?? main,
+  chooseImport: (summary, owner) => {
+    const win = owner ?? main;
+    if (!win || win.isDestroyed()) return Promise.resolve("cancel");
+    return imports.request(win.id, summary, (prompt) => {
+      if (!win.isDestroyed())
+        win.webContents.send("studio:importPrompt", prompt);
+    });
+  },
   onReplace: () => {
     for (const win of editors) win.destroy();
     editors.clear();
@@ -65,7 +75,7 @@ function current(payload: unknown): Record<string, unknown> {
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     throw new Error("请求无效");
   const object = payload as Record<string, unknown>;
-  if (object.generation !== session.snapshot().generation)
+  if (object.generation !== session.documentGeneration)
     throw new Error("工程已切换，请使用当前工程视图");
   return object;
 }
@@ -107,6 +117,7 @@ function createWindow(kind?: "pattern" | "sample", id?: string): BrowserWindow {
       });
   });
   win.on("closed", () => {
+    imports.cancelFor(win.id);
     windows.delete(win);
     editors.delete(win);
     if (audioOwner?.window === win) {
@@ -115,6 +126,8 @@ function createWindow(kind?: "pattern" | "sample", id?: string): BrowserWindow {
       broadcast("studio:audio", { type: "release", owner });
     }
   });
+  win.webContents.on("render-process-gone", () => imports.cancelFor(win.id));
+  win.webContents.on("did-start-loading", () => imports.cancelFor(win.id));
   const query: Record<string, string> =
     kind && id ? { kind, id, view: crypto.randomUUID() } : {};
   const dev = process.env.ELECTRON_RENDERER_URL;
@@ -210,6 +223,21 @@ async function doFile(action: FileAction): Promise<void> {
   }
 }
 app.whenReady().then(() => {
+  handle("studio:importChoice", (event, payload) => {
+    if (!payload || typeof payload !== "object")
+      throw new Error("导入选项无效");
+    const p = payload as Record<string, unknown>;
+    if (
+      typeof p.id !== "string" ||
+      !["smart", "original", "cancel"].includes(p.mode as string)
+    )
+      throw new Error("导入选项无效");
+    imports.respond(
+      BrowserWindow.fromWebContents(event.sender)!.id,
+      p.id,
+      p.mode as "smart" | "original" | "cancel",
+    );
+  });
   handle("studio:snapshot", () => session.snapshot());
   handle("studio:dispatch", (_event, payload) => {
     if (files.isBusy) throw new Error("文件操作进行中，请稍后重试");
@@ -294,8 +322,11 @@ app.whenReady().then(() => {
     event.preventDefault();
     if (closing) return;
     closing = true;
-    void files
-      .confirmClose()
+    void (async () => {
+      if (imports.cancelPending())
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      return files.confirmClose();
+    })()
       .then((ok) => {
         if (ok) {
           allowClose = true;

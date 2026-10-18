@@ -6,7 +6,7 @@ const packaged = process.argv.includes("--packaged");
 const exe =
   process.env.NBE_EXE ||
   path.resolve(
-    "../deliverables/NoteBlockEditor-0.3.0/win-unpacked/NoteBlock Editor.exe",
+    `../deliverables/NoteBlockEditor-${require("../package.json").version}/win-unpacked/NoteBlock Editor.exe`,
   );
 const results = path.resolve("test-results"),
   fixture = path.join(results, "roundtrip.nbproject"),
@@ -64,6 +64,11 @@ async function drag(locator, from, to) {
       };
       dialog.showMessageBox = async () => ({ response: 1 });
     });
+    await page.evaluate(() =>
+      window.studio.onImportPrompt((p) => {
+        if (p) void window.studio.respondImport(p.id, "original");
+      }),
+    );
     await check("production IPC and demo load", async () => {
       const s = await snapshot();
       assert.equal(s.project.patterns.length, 4);

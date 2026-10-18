@@ -1,4 +1,4 @@
-# NoteBlock Editor 0.3.0
+# NoteBlock Editor 0.4.0
 
 Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录是独立重构工程，旧版 `desktop` 保留。
 
@@ -14,8 +14,13 @@ Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录�
 - 独立播放/暂停和终止，暂停精确保留位置，一次终止归零；SONG / Pattern / Sample 范围。
 - 原生文件对话框，原子写入、失败保留原文件、未保存保护、完整工程保存/重开。
 - NBS v0–5 读取、v5 导出、旧工程迁移；自定义 NBS 定义及音频 ZIP 自动匹配，音频包导出。
+- NBS 导入预览和可选的“智能 Pattern 整理（Beta）”：按声部分组、识别完全相同的乐句并复用；保留原始布局备份，支持恢复和撤销。
 
-详细操作见 [使用说明](resources/使用说明.txt)。正式验证和已知范围见 [验收报告](docs/validation-0.3.0.md)。
+打开 NBS 后可取消勾选，沿用单 Pattern 原始布局。智能整理不量化、移调或删除音符，也不把近似旋律当成同一个 Pattern。乐句候选支持 1、2、3、4、6、8 小节，使用乐曲拍号；这是一版可继续改进的启发式算法，不承诺理解主歌、副歌或所有声部。
+
+“帮助 → 智能整理报告…”查看结果；“编辑 → 恢复原始导入布局…”会用导入时的音符和编排替换当前布局，请先保存需要保留的修改。恢复可撤销。完整工程保存报告和备份；NBS 格式本身不保存 Pattern，重新打开导出的 NBS 仍需重新选择整理方式。
+
+详细操作见 [使用说明](resources/使用说明.txt)。本轮研究见 [制作经验与算法依据](docs/smart-pattern-research.md)，验证和已知范围见 [0.4 验收报告](docs/validation-0.4.0.md)。
 
 ## 本地开发
 
@@ -27,6 +32,7 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm smoke
+pnpm smoke:smart
 pnpm pack:win
 pnpm smoke:packaged
 ```
@@ -40,6 +46,8 @@ node node_modules/vitest/vitest.mjs run
 node node_modules/electron-vite/bin/electron-vite.js build
 node node_modules/electron-builder/cli.js --win zip --x64
 node scripts/smoke.cjs
+node scripts/smart-import-smoke.cjs
+node scripts/analyze-nbs.cjs 'D:/path/to/Songs'
 ```
 
 真实 Electron 测试只替换系统对话框的路径选择；文件 IPC、序列化、磁盘读写、采样解码、鼠标和键盘操作仍使用实际实现。`NBE_EXE` 可指定解压后的发布 EXE。
@@ -47,6 +55,7 @@ node scripts/smoke.cjs
 ## 工程结构
 
 - `src/shared`：数据契约、事务/历史、NBS 适配、音频事件计划。
+- `src/shared/smartPattern`：独立的分组、特征、分段和精确复用算法，参数档案与算法版本；不依赖 UI 或网络服务。
 - `src/main`：安全 IPC、原生窗口、文件保存、音频 ZIP。
 - `src/preload`：受限桥接与工程代际防护。
 - `src/renderer/src`：工作区、编辑器、交互、窗口/菜单、音频时钟。
@@ -61,4 +70,4 @@ node scripts/smoke.cjs
 
 ## 当前边界
 
-本版是可运行的重构核心，472 项需求总表仍是持续开发清单。MIDI 智能转换、鼓点素材库、半自动丰富听感未实现。NBS v6 未支持。直接音频 Clip 无法无损表达成 NBS，导出会提示。复杂拍号、细分时间及工程播放参数受到 NBS 格式约束，完整工程保留所有内部数据。
+本版是可运行的重构核心，472 项需求总表仍是持续开发清单。智能整理仍可能拆出较多 Pattern；缺少可靠名称的交织旋律、弱起和跨小节主题需要后续改进。超过资源预算时保留原布局，并在预览中说明原因。MIDI 智能转换、鼓点素材库、半自动丰富听感未实现。NBS v6 未支持。直接音频 Clip 无法无损表达成 NBS，导出会提示。复杂拍号、细分时间及工程播放参数受到 NBS 格式约束，完整工程保留所有内部数据。

@@ -7,7 +7,15 @@ import type {
   SaveDialogOptions,
   MessageBoxOptions,
 } from "electron";
-import type { FileAction, FileResult, Project, Sample } from "../shared/model";
+import type {
+  FileAction,
+  FileResult,
+  Project,
+  Sample,
+  NbsImportSummary,
+} from "../shared/model";
+import { organizeImportedProject } from "../shared/smartPattern";
+import type { ImportChoice } from "./importBroker";
 import { Session, createEmptyProject, uid } from "../shared/session";
 import {
   decodeProject,
@@ -217,6 +225,10 @@ interface Options {
   storage?: FileStorage;
   onReplace?: () => void;
   soundsRoots?: string[];
+  chooseImport?: (
+    summary: NbsImportSummary,
+    owner?: BrowserWindow,
+  ) => Promise<ImportChoice>;
 }
 export class ProjectFiles {
   private dialogs: FileDialogs;
@@ -311,18 +323,34 @@ export class ProjectFiles {
         return this.result(true);
       }
       if (action === "open") {
+        const owner = this.options.getWindow?.();
         const path = await this.dialogs.open("project");
         if (!path) return this.result(false);
         const bytes = await this.storage.read(path),
-          project = decodeProject(bytes, path),
           warnings: string[] = [];
+        let project = decodeProject(bytes, path);
+        const isProject = /^\s*\{/.test(new TextDecoder().decode(bytes));
+        if (!isProject && this.options.chooseImport) {
+          const organized = organizeImportedProject(project);
+          organized.summary.fileName = basename(path);
+          if (organized.project.importOrganization)
+            organized.project.importOrganization.summary = structuredClone(
+              organized.summary,
+            );
+          const choice = await this.options.chooseImport(
+            organized.summary,
+            owner,
+          );
+          if (choice === "cancel") return this.result(false);
+          if (choice === "smart" && organized.summary.applicable)
+            project = organized.project;
+        }
         await this.resolveSamples(project, dirname(path), warnings, false);
         if (!(await this.mayReplace())) return this.result(false);
         this.options.session.replace(project);
         // Only JSON projects may become the Ctrl+S target. A binary song can
         // have any extension, including one selected through “all files”.
-        if (/^\s*\{/.test(new TextDecoder().decode(bytes)))
-          this.options.session.markSaved(path);
+        if (isProject) this.options.session.markSaved(path);
         this.options.onReplace?.();
         return this.result(true, warnings);
       }

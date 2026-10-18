@@ -25,10 +25,12 @@ import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { Playlist } from "./Playlist";
 import { PatternEditor } from "./PatternEditor";
 import { SampleEditor } from "./SampleEditor";
+import { ImportDialog, ImportSummary } from "./ImportDialog";
 import {
   ticksPerBar,
   type FileAction,
   type Command,
+  type ImportPrompt,
   type TransportState,
 } from "../../shared/model";
 import type { Source, RequestText } from "./ui";
@@ -56,7 +58,13 @@ export function App() {
       items: MenuItem[];
     } | null>(null),
     [dialog, setDialog] = useState<TextDialog | null>(null),
-    [info, setInfo] = useState<{ title: string; body: ReactNode } | null>(null);
+    [info, setInfo] = useState<{
+      title: string;
+      body: ReactNode;
+      className?: string;
+      hideClose?: boolean;
+    } | null>(null),
+    [importPrompt, setImportPrompt] = useState<ImportPrompt | null>(null);
   const [status, setStatus] = useState("就绪"),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -66,6 +74,18 @@ export function App() {
   const native = new URLSearchParams(location.search),
     nativeKind = native.get("kind"),
     nativeId = native.get("id");
+  useEffect(
+    () =>
+      window.studio.onImportPrompt((prompt) => {
+        if (prompt) {
+          setDialog(null);
+          setInfo(null);
+          setMenuState(null);
+        }
+        setImportPrompt(prompt);
+      }),
+    [],
+  );
   useEffect(
     () =>
       audio.subscribe((s) => {
@@ -313,6 +333,7 @@ export function App() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
+      if (document.querySelector("dialog[open]")) return;
       const mod = e.ctrlKey || e.metaKey,
         key = e.key.toLowerCase();
       if (
@@ -524,6 +545,46 @@ export function App() {
                     disabled: !snapshot.canRedo,
                     action: () => void run({ type: "redo" }),
                   },
+                  { separator: true, label: "" },
+                  {
+                    label: "恢复原始导入布局…",
+                    disabled: !project.importOrganization,
+                    action: () =>
+                      setInfo({
+                        title: "恢复原始导入布局？",
+                        hideClose: true,
+                        body: (
+                          <>
+                            <p>
+                              此操作会用导入时备份的原始布局替换当前全部
+                              Pattern、音符、编排引用和轨道。导入后的音符与编排修改也会被替换。
+                            </p>
+                            <p>
+                              乐器、采样与工程其它设置保留。此操作可以撤销。
+                            </p>
+                            <div className="dialog-actions">
+                              <button onClick={() => setInfo(null)}>
+                                取消
+                              </button>
+                              <button
+                                className="danger"
+                                onClick={() => {
+                                  void run({
+                                    type: "import:restoreOriginal",
+                                  }).then((result) => {
+                                    if (result)
+                                      setStatus("已恢复原始导入布局，可撤销");
+                                  });
+                                  setInfo(null);
+                                }}
+                              >
+                                恢复原始布局
+                              </button>
+                            </div>
+                          </>
+                        ),
+                      }),
+                  },
                 ],
               ],
               [
@@ -578,6 +639,27 @@ export function App() {
                 "帮助",
                 [
                   {
+                    label: "智能整理报告…",
+                    disabled: !project.importOrganization,
+                    action: () => {
+                      const organization = project.importOrganization;
+                      if (!organization) return;
+                      setInfo({
+                        title: "智能整理报告",
+                        className: "import-report",
+                        body: (
+                          <>
+                            <p className="import-report-note">
+                              此报告保存于工程，记录导入时的整理结果，不随后续编辑重新计算。报告版本：
+                              <code>{organization.version}</code>。
+                            </p>
+                            <ImportSummary summary={organization.summary} />
+                          </>
+                        ),
+                      });
+                    },
+                  },
+                  {
                     label: "操作与快捷键",
                     action: () =>
                       setInfo({
@@ -606,7 +688,7 @@ export function App() {
                     label: "关于 NoteBlock Editor",
                     action: () =>
                       setInfo({
-                        title: "NoteBlock Editor 0.3.0",
+                        title: "NoteBlock Editor 0.4.0",
                         body: (
                           <p>
                             Windows 桌面编辑器 · 新工作区
@@ -637,7 +719,7 @@ export function App() {
             ))}
             <span className="spacer" />
             <span className="version-label">
-              NOTE<b>BLOCK</b> <small>0.3</small>
+              NOTE<b>BLOCK</b> <small>0.4</small>
             </span>
           </div>
           <header className="transport-bar">
@@ -1197,7 +1279,14 @@ export function App() {
         </span>
       </footer>
       <ContextMenu menu={menuState} onClose={() => setMenuState(null)} />
-      {dialog && (
+      {importPrompt && (
+        <ImportDialog
+          key={importPrompt.id}
+          prompt={importPrompt}
+          respond={(id, mode) => window.studio.respondImport(id, mode)}
+        />
+      )}
+      {!importPrompt && dialog && (
         <Dialog title={dialog.title} close={() => setDialog(null)}>
           <form
             onSubmit={(e) => {
@@ -1230,12 +1319,18 @@ export function App() {
           </form>
         </Dialog>
       )}
-      {info && (
-        <Dialog title={info.title} close={() => setInfo(null)}>
+      {!importPrompt && info && (
+        <Dialog
+          title={info.title}
+          close={() => setInfo(null)}
+          className={info.className}
+        >
           {info.body}
-          <div className="dialog-actions">
-            <button onClick={() => setInfo(null)}>关闭</button>
-          </div>
+          {!info.hideClose && (
+            <div className="dialog-actions">
+              <button onClick={() => setInfo(null)}>关闭</button>
+            </div>
+          )}
         </Dialog>
       )}
     </div>
@@ -1254,19 +1349,36 @@ function Dialog({
   title,
   close,
   children,
+  className,
 }: {
   title: string;
   close: () => void;
   children: ReactNode;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleRef = useRef(`dialog-${crypto.randomUUID()}`);
   useEffect(() => {
-    ref.current?.showModal();
+    const dialog = ref.current;
+    const previous =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    dialog?.showModal();
+    return () => {
+      dialog?.close();
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
+    };
   }, []);
   return (
-    <dialog ref={ref} className="studio-dialog" onCancel={close}>
+    <dialog
+      ref={ref}
+      className={`studio-dialog ${className ?? ""}`}
+      aria-labelledby={titleRef.current}
+      onCancel={close}
+    >
       <header>
-        <strong>{title}</strong>
+        <strong id={titleRef.current}>{title}</strong>
         <button aria-label="关闭对话框" onClick={close}>
           <X size={16} />
         </button>

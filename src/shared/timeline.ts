@@ -89,6 +89,7 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
     tick: number,
     length: number,
     offset: number,
+    tailTicks?: number,
   ) {
     const solo = pattern.layers.some((l) => l.solo);
     for (const note of pattern.notes) {
@@ -106,10 +107,13 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
         ...event,
         id: `${id}:${note.id}`,
         tick: tick + note.tick - offset,
-        durationTicks: Math.min(
-          length - (note.tick - offset),
-          pattern.length - note.tick,
-        ),
+        durationTicks:
+          tailTicks !== undefined
+            ? Math.max(0, tailTicks - (note.tick - offset))
+            : Math.min(
+                length - (note.tick - offset),
+                pattern.length - note.tick,
+              ),
       });
     }
   }
@@ -152,7 +156,14 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
       if (clip.kind === "pattern") {
         const pattern = project.patterns.find((p) => p.id === clip.sourceId);
         if (!pattern) throw new Error(`Missing pattern: ${clip.sourceId}`);
-        addPattern(pattern, clip.id, clip.tick, clip.length, clip.offset);
+        addPattern(
+          pattern,
+          clip.id,
+          clip.tick,
+          clip.length,
+          clip.offset,
+          clip.tailTicks,
+        );
       } else {
         events.push({
           ...sampleEvent(project, clip.sourceId),

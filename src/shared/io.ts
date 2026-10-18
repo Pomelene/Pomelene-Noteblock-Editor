@@ -203,6 +203,14 @@ export function toNbs(input: Project): {
     omittedSamples = false,
     unsupportedPitch = false;
   const solo = project.tracks.some((t) => t.solo);
+  const lanes = new Map<string, number>(),
+    claimedOriginal = new Set<number>();
+  if (
+    project.patterns.some((p) =>
+      p.layers.some((l) => l.sourceIndex !== undefined),
+    )
+  )
+    meta.layers = structuredClone(project.nbs?.layers ?? []);
   for (const c of project.clips) {
     const track = project.tracks[c.track];
     if (c.muted || track.muted || (solo && !track.solo)) continue;
@@ -211,16 +219,40 @@ export function toNbs(input: Project): {
       continue;
     }
     const source = project.patterns.find((p) => p.id === c.sourceId)!,
-      base = meta.layers.length,
       layerSolo = source.layers.some((l) => l.solo);
-    // Each source/clip gets independent layer settings. The codec allocates extra lanes for note collisions.
-    for (const l of source.layers)
-      meta.layers.push({
-        name: l.name,
-        volume: Math.round(l.volume),
-        panning: Math.round(l.panning),
-        locked: Number(l.locked),
-      });
+    // Repeated references share lane settings. The codec still allocates
+    // collision lanes when references overlap at the same tick.
+    const layerMap = source.layers.map((l, index) => {
+      const definition = {
+          name: l.name,
+          volume: Math.round(l.volume),
+          panning: Math.round(l.panning),
+          locked: Number(l.locked),
+        },
+        key = JSON.stringify([
+          l.sourceIndex === undefined
+            ? [source.id, index]
+            : ["nbs", l.sourceIndex],
+          definition,
+        ]);
+      const known = lanes.get(key);
+      if (known !== undefined) return known;
+      let destination = meta.layers.length;
+      if (l.sourceIndex !== undefined && !claimedOriginal.has(l.sourceIndex)) {
+        destination = l.sourceIndex;
+        claimedOriginal.add(destination);
+        while (meta.layers.length <= destination)
+          meta.layers.push({
+            name: `图层 ${meta.layers.length + 1}`,
+            volume: 100,
+            panning: 100,
+            locked: 0,
+          });
+        meta.layers[destination] = definition;
+      } else meta.layers.push(definition);
+      lanes.set(key, destination);
+      return destination;
+    });
     fractional ||=
       !Number.isInteger(c.tick) ||
       !Number.isInteger(c.length) ||
@@ -248,7 +280,7 @@ export function toNbs(input: Project): {
       notes.push({
         ...n,
         tick: relative,
-        layer: base + n.layer,
+        layer: layerMap[n.layer],
         instrument: customIds.get(n.instrument) ?? n.instrument,
       });
     }

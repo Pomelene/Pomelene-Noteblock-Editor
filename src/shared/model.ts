@@ -17,6 +17,7 @@ export interface Layer {
   locked: boolean;
   muted: boolean;
   solo: boolean;
+  sourceIndex?: number;
 }
 export interface Pattern {
   id: string;
@@ -62,6 +63,44 @@ export interface Clip {
   offset: number;
   track: number;
   muted: boolean;
+  /** Imported phrase triggers may ring across visual boundaries, up to this offset. */
+  tailTicks?: number;
+}
+export interface NbsImportSummary {
+  fileName: string;
+  title: string;
+  noteCount: number;
+  layerCount: number;
+  durationTicks: number;
+  bpm: number;
+  meter: string;
+  algorithmVersion: string;
+  applicable: boolean;
+  original: { patterns: number; clips: number; tracks: number };
+  proposed: {
+    patterns: number;
+    clips: number;
+    tracks: number;
+    reusedClips: number;
+  };
+  groups: {
+    name: string;
+    sourceLayers: number[];
+    noteCount: number;
+    patternCount: number;
+    clipCount: number;
+  }[];
+  warnings: string[];
+}
+export interface ImportPrompt {
+  id: string;
+  summary: NbsImportSummary;
+}
+export interface ImportOrganization {
+  version: "nbs-structure-1";
+  summary: NbsImportSummary;
+  /** Immutable JSON layout backup; audio is referenced from the project, not copied. */
+  originalData: string;
 }
 export interface Project {
   schema: 2;
@@ -76,6 +115,7 @@ export interface Project {
   clips: Clip[];
   loop: { enabled: boolean; start: number; end: number };
   nbs?: NbsMetadata;
+  importOrganization?: ImportOrganization;
 }
 export interface Snapshot {
   project: Project;
@@ -86,6 +126,7 @@ export interface Snapshot {
   document: { path?: string; dirty: boolean };
 }
 export type Command =
+  | { type: "import:restoreOriginal" }
   | {
       type: "project:update";
       patch: Partial<Pick<Project, "title" | "bpm" | "meter" | "loop">>;
@@ -179,6 +220,11 @@ export type AudioSignal =
       tick?: number;
     };
 export interface StudioAPI {
+  onImportPrompt(fn: (prompt: ImportPrompt | null) => void): () => void;
+  respondImport(
+    id: string,
+    mode: "smart" | "original" | "cancel",
+  ): Promise<void>;
   getSnapshot(): Promise<Snapshot>;
   dispatch(command: Command, originGeneration?: number): Promise<Snapshot>;
   onSnapshot(fn: (s: Snapshot) => void): () => void;

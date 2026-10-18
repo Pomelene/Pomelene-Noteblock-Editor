@@ -324,6 +324,7 @@ export function validateProject(value: unknown): Project {
       bool(l.locked);
       bool(l.muted);
       bool(l.solo);
+      if (l.sourceIndex !== undefined) num(l.sourceIndex, 0, 4095, true);
     }
     const noteIds = new Set<string | number>();
     for (const rawNote of arr(pattern.notes, 100_000)) {
@@ -363,6 +364,7 @@ export function validateProject(value: unknown): Project {
     num(c.offset, 0, MAX_TICK);
     num(c.track, 0, trackArray.length - 1, true);
     bool(c.muted);
+    if (c.tailTicks !== undefined) num(c.tailTicks, 0, MAX_TICK);
   }
   const loop = obj(p.loop);
   bool(loop.enabled);
@@ -375,6 +377,38 @@ export function validateProject(value: unknown): Project {
     num(n.version, 0, 5, true);
     arr(n.customInstruments, 255);
     arr(n.layers, 4096);
+  }
+  if (p.importOrganization !== undefined) {
+    const info = obj(p.importOrganization);
+    if (info.version !== "nbs-structure-1") fail("不支持此智能整理版本");
+    str(info.originalData, 32 * 1024 * 1024);
+    const s = obj(info.summary);
+    str(s.fileName, 4096);
+    str(s.title);
+    str(s.algorithmVersion, 128);
+    if (s.algorithmVersion !== info.version) fail("智能整理版本信息不一致");
+    bool(s.applicable);
+    num(s.noteCount, 0, 100000, true);
+    num(s.layerCount, 0, 4096, true);
+    num(s.durationTicks, 0, MAX_TICK);
+    num(s.bpm, 0.15, 9830.25);
+    str(s.meter, 32);
+    for (const raw of [s.original, s.proposed]) {
+      const counts = obj(raw);
+      num(counts.patterns, 0, 1024, true);
+      num(counts.clips, 0, 10000, true);
+      num(counts.tracks, 0, 256, true);
+    }
+    num(obj(s.proposed).reusedClips, 0, 10000, true);
+    for (const raw of arr(s.groups, 64)) {
+      const g = obj(raw);
+      str(g.name, 4096);
+      arr(g.sourceLayers, 4096).forEach((n) => num(n, 0, 4095, true));
+      num(g.noteCount, 0, 100000, true);
+      num(g.patternCount, 0, 1024, true);
+      num(g.clipCount, 0, 10000, true);
+    }
+    arr(s.warnings, 128).forEach((w) => str(w, 4096));
   }
   return structuredClone(value) as Project;
 }
@@ -404,6 +438,9 @@ export class Session {
   constructor(project = createDemoProject()) {
     this.project = validateProject(project);
     this.saved = JSON.stringify(this.project);
+  }
+  get documentGeneration(): number {
+    return this.generation;
   }
   snapshot(): Snapshot {
     return {
@@ -475,6 +512,20 @@ export class Session {
         return { pat, chosen };
       };
       switch (command.type) {
+        case "import:restoreOriginal": {
+          if (!p.importOrganization) fail("当前工程没有原始导入布局");
+          let original: Record<string, unknown>;
+          try {
+            original = obj(JSON.parse(p.importOrganization.originalData));
+          } catch {
+            fail("原始导入布局备份已损坏");
+          }
+          p.patterns = original.patterns as Project["patterns"];
+          p.clips = original.clips as Project["clips"];
+          p.tracks = original.tracks as Project["tracks"];
+          delete p.importOrganization;
+          break;
+        }
         case "project:update":
           Object.assign(p, command.patch);
           break;
@@ -492,9 +543,18 @@ export class Session {
                 },
           );
           break;
-        case "pattern:update":
-          Object.assign(pattern(command.id), command.patch);
+        case "pattern:update": {
+          const pat = pattern(command.id);
+          if (
+            command.patch.length !== undefined &&
+            command.patch.length !== pat.length
+          )
+            for (const clip of p.clips)
+              if (clip.kind === "pattern" && clip.sourceId === pat.id)
+                delete clip.tailTicks;
+          Object.assign(pat, command.patch);
           break;
+        }
         case "pattern:remove":
           find(p.patterns, command.id);
           p.patterns = p.patterns.filter((x) => x.id !== command.id);
@@ -572,6 +632,13 @@ export class Session {
         case "clips:update":
           for (const id of command.ids) {
             const c = editable(id);
+            if (
+              (command.patch.length !== undefined &&
+                command.patch.length !== c.length) ||
+              (command.patch.offset !== undefined &&
+                command.patch.offset !== c.offset)
+            )
+              delete c.tailTicks;
             Object.assign(c, command.patch);
             if (p.tracks[c.track]?.locked) fail("目标轨道已锁定");
           }
