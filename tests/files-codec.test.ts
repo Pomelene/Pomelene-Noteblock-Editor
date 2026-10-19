@@ -17,7 +17,7 @@ it("round trips schema2 including embedded samples and independent clip windows"
   });
   expect(decodeProject(encodeProject(p))).toEqual(p);
 });
-it("migrates the old project envelope retaining layer metadata and clip length", () => {
+it("rejects the obsolete project envelope with a v2 instruction", () => {
   const old = {
     format: "note-block-project",
     version: 1,
@@ -45,13 +45,9 @@ it("migrates the old project envelope retaining layer metadata and clip length",
       clips: [{ id: "c", patternId: "p", tick: 4, track: 2 }],
     },
   };
-  const p = decodeProject(new TextEncoder().encode(JSON.stringify(old)));
-  expect(p).toMatchObject({
-    schema: 2,
-    title: "Old",
-    clips: [{ sourceId: "p", length: 16, offset: 0, track: 2 }],
-  });
-  expect(p.patterns[0].layers).toHaveLength(3);
+  expect(() =>
+    decodeProject(new TextEncoder().encode(JSON.stringify(old))),
+  ).toThrow(/v2/);
 });
 it("exports visible clip windows with per-pattern layer settings and warns about sample clips", () => {
   const p = createDemoProject();

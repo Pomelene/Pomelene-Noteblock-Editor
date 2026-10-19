@@ -1,10 +1,12 @@
-# Pomelene Noteblock Editor 0.5.0
+# Pomelene Noteblock Editor 0.5.1
 
 Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录是独立重构工程，旧版 `desktop` 保留。
 
 远端代码仓库：[Pomelene/Pomelene-Noteblock-Editor](https://github.com/Pomelene/Pomelene-Noteblock-Editor)（私有）。`main` 保存当前代码，版本标签保留已交付源码，`legacy/desktop-0.2` 保留旧工程提交历史。开发与本地文件保留规则见 [仓库与产物管理](docs/repository-and-retention.md)。
 
-正式命名后的开发预览版为 **0.5.0**，完整保留此前功能。下载 [Windows 便携包和独立源码包](https://github.com/Pomelene/Pomelene-Noteblock-Editor/releases/tag/pomelene-noteblock-editor-v0.5.0)。旧开发标签不移动，本版使用 `pomelene-noteblock-editor-v0.5.0`。
+当前开发版 **0.5.1** 优先补齐 NBS 控制事件与工程 v2，说明见 [工程 v2 与 NBS 控制事件](docs/project-v2.md)。此前正式命名版的 [0.5.0 Windows 便携包和独立源码包](https://github.com/Pomelene/Pomelene-Noteblock-Editor/releases/tag/pomelene-noteblock-editor-v0.5.0) 继续保留，历史标签不移动。
+
+本轮 [0.5.1 验证记录](docs/validation-0.5.1.md) 包含 247 项自动测试、112 首用户歌曲兼容性测试及实际打包程序回归结果。
 
 采用源对象、编排引用、编辑视图三层模型。Pattern 是可编辑乐段，片段采样是只读的可复用音符快照，均可反复编排和打开多个内部或原生窗口。历史音频文件与乐器单音在“音频 / 乐器资源”中单独管理。主进程维护工程、历史及原生文件访问，音频通过 AudioContext 时钟调度并跨窗口协调。
 
@@ -27,7 +29,8 @@ Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录�
 - Pattern 显眼的音色选择栏显示各音色音符数量；聚焦当前音色时，其余音色音符和力度条半透明，支持显示全部。
 - 独立播放/暂停和终止，暂停精确保留位置，一次终止归零；SONG / Pattern / Sample 范围。
 - 原生文件对话框，原子写入、失败保留原文件、未保存保护、完整工程保存/重开。
-- NBS v0–6 读取、v5 导出、旧工程迁移；兼容旧文件零填充、少报图层及扩展原版音色，异常力度明确提示规范化。v6 铜号按具名自定义资源保留，音频缺失时明确提示。
+- NBS v0–6 读取、v5 导出；兼容旧文件零填充、少报图层及扩展原版音色，异常力度明确提示规范化。v6 铜号按具名自定义资源保留，音频缺失时明确提示。
+- NBS 变速与停止发声控制参与整曲播放、跳转和循环；视觉事件保留并可查看。控制定义不作为缺失采样。工程保存为带版本前缀、长度及 CRC32 校验的 v2 文件，旧工程不再导入。
 - 播放位置固定数字栏宽，TICK 始终三位；PAT 目标跟随编排中的来源选择和活动编辑窗口，SONG 不受来源选择影响。
 - NBS 导入预览和可选的“智能 Pattern 整理（Beta）”：按声部分组、识别完全相同的乐句并复用；保留原始布局备份，支持恢复和撤销。
 
@@ -35,7 +38,7 @@ Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录�
 
 “帮助 → 智能整理报告…”查看结果；“编辑 → 恢复原始导入布局…”会用导入时的音符和编排替换当前布局，请先保存需要保留的修改。恢复可撤销。完整工程保存报告和备份；NBS 格式本身不保存 Pattern，重新打开导出的 NBS 仍需重新选择整理方式。
 
-保存选区会截取所选引用可见窗口内的触发事件，保留中间留白和末尾补白；不将音频识别成音符。片段音符和图层只读，音色仍引用当前工程的乐器资源；导入片段保留 tick 并跟随工程速度。新版本可读取旧 schema 2 工程；含新片段类型的工程需要 0.5 或更新版本。
+保存选区会截取所选引用可见窗口内的触发事件，保留中间留白和末尾补白；不将音频识别成音符。片段音符和图层只读，音色仍引用当前工程的乐器资源；导入片段保留 tick 并跟随工程速度。全局控制事件通过整曲 NBS 打开，当前不直接导入为片段。工程仅支持新的 v2 容器，不读取此前的 JSON 工程。
 
 详细操作见 [使用说明](resources/使用说明.txt)。本次正式命名发布见 [0.5.0 发布记录](docs/pomelene-noteblock-editor-0.5.0.md)，功能验收见 [此前开发验收报告](docs/validation-0.7.0.md)，历史见 [0.6.1 报告](docs/validation-0.6.1.md)；算法依据见 [制作经验与算法依据](docs/smart-pattern-research.md)。
 

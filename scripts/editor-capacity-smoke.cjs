@@ -1,3 +1,4 @@
+const { encodeProject, decodeProject } = require("./project-fixture.cjs");
 const { _electron: electron, expect } = require("playwright/test");
 const path = require("node:path");
 const fs = require("node:fs");
@@ -67,10 +68,7 @@ const version = require("../package.json").version;
     project.patterns[0].notes[0].instrument = 16;
     const fixture = path.resolve("test-results/mapping-input.nbproject"),
       saved = path.resolve("test-results/mapping-saved.nbproject");
-    fs.writeFileSync(
-      fixture,
-      JSON.stringify({ format: "note-block-project", version: 2, project }),
-    );
+    fs.writeFileSync(fixture, await encodeProject(project));
     await app.evaluate((_, file) => globalThis.openPaths.push(file), fixture);
     assert.equal(
       (await page.evaluate(() => window.studio.file("open"))).ok,

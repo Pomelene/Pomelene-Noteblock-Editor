@@ -1,3 +1,4 @@
+const { encodeProject, decodeProject } = require("./project-fixture.cjs");
 const { _electron: electron, expect } = require("playwright/test");
 const fs = require("node:fs"),
   path = require("node:path"),
@@ -163,14 +164,7 @@ function canonical(p) {
       song = path.join(resultDir, "smart-input.nbs"),
       saved = path.join(resultDir, "smart-saved.nbproject"),
       exported = path.join(resultDir, "smart-exported.nbs");
-    fs.writeFileSync(
-      source,
-      JSON.stringify({
-        format: "note-block-project",
-        version: 2,
-        project: seed,
-      }),
-    );
+    fs.writeFileSync(source, await encodeProject(seed));
     await open(source);
     await expect
       .poll(async () => (await snap()).project.title)
@@ -328,7 +322,7 @@ function canonical(p) {
         await app.evaluate((_, p) => globalThis.testSave.push(p), saved);
         await page.getByLabel("保存工程", { exact: true }).click();
         await expect.poll(async () => (await snap()).document.path).toBe(saved);
-        const stored = JSON.parse(fs.readFileSync(saved, "utf8")).project;
+        const stored = await decodeProject(fs.readFileSync(saved));
         assert.equal(stored.importOrganization.version, "nbs-structure-1");
         assert.equal(typeof stored.importOrganization.originalData, "string");
         const generation = (await snap()).generation;

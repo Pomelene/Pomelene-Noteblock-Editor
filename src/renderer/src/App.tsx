@@ -29,6 +29,8 @@ import { SampleEditor } from "./SampleEditor";
 import { InstrumentManager } from "./InstrumentManager";
 import { PhrasePreview } from "./PhrasePreview";
 import { ImportDialog, ImportSummary } from "./ImportDialog";
+import { NbsEventSummary } from "./NbsEventSummary";
+import { getNbsEventKind } from "../../shared/nbsEvents";
 import { resolveShortcut } from "./shortcuts";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { TransportPosition } from "./TransportPosition";
@@ -253,6 +255,7 @@ export function App() {
                     );
                     return (
                       instrument.mappingTargetId === undefined &&
+                      !getNbsEventKind(instrument.name) &&
                       sample &&
                       !sample.builtin &&
                       !sample.dataUrl
@@ -1033,7 +1036,7 @@ export function App() {
                     label: "关于 Pomelene Noteblock Editor",
                     action: () =>
                       setInfo({
-                        title: "Pomelene Noteblock Editor 0.5.0",
+                        title: "Pomelene Noteblock Editor 0.5.1",
                         body: (
                           <p>
                             Windows 桌面编辑器 · 新工作区
@@ -1064,7 +1067,7 @@ export function App() {
             ))}
             <span className="spacer" />
             <span className="version-label">
-              POMELENE <b>NOTEBLOCK EDITOR</b> <small>0.5.0</small>
+              POMELENE <b>NOTEBLOCK EDITOR</b> <small>0.5.1</small>
             </span>
           </div>
           <header className="transport-bar">
@@ -1493,6 +1496,9 @@ export function App() {
                       ),
                     )}
                 </details>
+              )}
+              {(filter === "all" || filter === "sample") && (
+                <NbsEventSummary project={project} />
               )}
             </div>
             <div className="browser-selected">

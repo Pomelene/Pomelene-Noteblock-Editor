@@ -1,3 +1,4 @@
+const { encodeProject, decodeProject } = require("./project-fixture.cjs");
 const { _electron: electron, expect } = require("playwright/test");
 const path = require("node:path"),
   fs = require("node:fs"),
@@ -338,9 +339,12 @@ async function drag(locator, from, to) {
         await expect
           .poll(async () => (await snapshot()).document.path)
           .toBe(fixture);
-        const saved = JSON.parse(fs.readFileSync(fixture, "utf8"));
-        assert.equal(saved.version, 2);
-        assert.equal(saved.project.patterns.length, 4);
+        const saved = await decodeProject(fs.readFileSync(fixture));
+        assert.equal(
+          fs.readFileSync(fixture).subarray(0, 15).toString(),
+          "PNE-PROJECT v2\n",
+        );
+        assert.equal(saved.patterns.length, 4);
       },
     );
     await check(
@@ -356,7 +360,7 @@ async function drag(locator, from, to) {
           "false",
         );
         assert.equal(
-          JSON.parse(fs.readFileSync(fixture, "utf8")).project.title,
+          (await decodeProject(fs.readFileSync(fixture))).title,
           "Roundtrip verification",
         );
       },
@@ -484,14 +488,7 @@ async function drag(locator, from, to) {
         const custom = path.join(results, "custom.nbproject"),
           pack = path.join(results, "instruments.zip"),
           song = path.join(results, "custom.nbs");
-        fs.writeFileSync(
-          custom,
-          JSON.stringify({
-            format: "note-block-project",
-            version: 2,
-            project: seed,
-          }),
-        );
+        fs.writeFileSync(custom, await encodeProject(seed));
         await app.evaluate((_, p) => globalThis.testOpen.push(p), custom);
         await page.evaluate(() => window.studio.file("open"));
         await app.evaluate((_, p) => globalThis.testSave.push(p), pack);
@@ -551,14 +548,7 @@ async function drag(locator, from, to) {
           },
         ];
         const file = path.join(results, "dense.nbproject");
-        fs.writeFileSync(
-          file,
-          JSON.stringify({
-            format: "note-block-project",
-            version: 2,
-            project: seed,
-          }),
-        );
+        fs.writeFileSync(file, await encodeProject(seed));
         await app.evaluate((_, p) => globalThis.testOpen.push(p), file);
         await page.evaluate(() => window.studio.file("open"));
         await page.getByTestId("source-" + pattern.id).dblclick();

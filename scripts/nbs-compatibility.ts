@@ -26,6 +26,8 @@ const musical = (project: ReturnType<typeof decodeNbs>) => ({
   notes: project.patterns.flatMap((p) =>
     p.notes.map(({ id: _id, ...note }) => note),
   ),
+  controls:
+    project.nbs?.controlEvents?.map(({ id: _id, ...event }) => event) ?? [],
 });
 for (const file of await files(corpus)) {
   const data = await readFile(file);

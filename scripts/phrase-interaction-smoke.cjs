@@ -1,3 +1,4 @@
+const { encodeProject, decodeProject } = require("./project-fixture.cjs");
 const { _electron: electron, expect } = require("playwright/test");
 const assert = require("node:assert/strict"),
   fs = require("node:fs"),
@@ -92,14 +93,7 @@ async function closeEditors() {
     seed.clips = [];
     seed.loop = { enabled: false, start: 0, end: 64 };
     const seedPath = path.join(results, "gesture-seed.nbproject");
-    fs.writeFileSync(
-      seedPath,
-      JSON.stringify({
-        format: "note-block-project",
-        version: 2,
-        project: seed,
-      }),
-    );
+    fs.writeFileSync(seedPath, await encodeProject(seed));
     await fileOpen(seedPath);
     await expect.poll(async () => (await project()).title).toBe(seed.title);
     const clips = () => page.getByTestId("playlist-canvas");
@@ -509,7 +503,7 @@ async function closeEditors() {
           .poll(async () => (await snapshot()).document.path)
           .toBe(saved);
         assert.deepEqual(
-          JSON.parse(fs.readFileSync(saved, "utf8")).project.phrases[0],
+          (await decodeProject(fs.readFileSync(saved))).phrases[0],
           frozen,
         );
         await fileOpen(saved);

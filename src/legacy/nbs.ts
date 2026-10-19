@@ -1,3 +1,8 @@
+import {
+  getNbsEventKind,
+  stopRangeForEvent,
+  type NbsControlEvent,
+} from "../shared/nbsEvents";
 import type { Note, Project } from "./project";
 
 export interface NbsLayer {
@@ -35,6 +40,7 @@ export interface NbsMetadata {
   customInstruments: NbsCustomInstrument[];
   rawStrings: Record<string, { text: string; bytes: number[] }>;
   warnings: string[];
+  controlEvents?: NbsControlEvent[];
 }
 export type NbsProject = Project & { nbs?: NbsMetadata };
 const MAX_BYTES = 32 * 1024 * 1024,
@@ -182,16 +188,10 @@ export function decodeNbs(data: Uint8Array): NbsProject {
       layer = integer(layer + delta, 0, 4095, "note layer");
       inferredHeight = Math.max(inferredHeight, layer + 1);
       const instrument = byte(),
-        pitch = integer(byte(), 0, 87, "key") + 21;
+        pitch = byte() + 21;
       const rawVelocity = version >= 4 ? byte() : 100;
-      const velocity = Math.min(100, rawVelocity);
-      if (rawVelocity > 100)
-        repairedVelocities.set(
-          rawVelocity,
-          (repairedVelocities.get(rawVelocity) ?? 0) + 1,
-        );
-      const panning =
-        version >= 4 ? integer(byte(), 0, 200, "note panning") : 100;
+      const velocity = rawVelocity;
+      const panning = version >= 4 ? byte() : 100;
       const finePitch = version >= 4 ? signed() : 0;
       if (notes.length >= MAX_NOTES)
         throw new Error("NBS exceeds 500,000 notes");
@@ -245,10 +245,6 @@ export function decodeNbs(data: Uint8Array): NbsProject {
     );
     while (layers.length < inferredHeight) layers.push(defaultLayer());
   }
-  for (const [value, count] of repairedVelocities)
-    warnings.push(
-      `${count} 个音符的力度 ${value} 超出 NBS 0–100 范围，已规范为 100；音符未删除。`,
-    );
   const classicExtended =
     version === 0 &&
     customCount === 0 &&
@@ -296,6 +292,43 @@ export function decodeNbs(data: Uint8Array): NbsProject {
         "remapped instrument",
       );
   }
+  const controlEvents: NbsControlEvent[] = [];
+  const ordinaryNotes: Note[] = [];
+  for (const n of notes) {
+    const kind = getNbsEventKind(
+      customInstruments[n.instrument - 16]?.name ?? "",
+    );
+    if (kind) {
+      controlEvents.push({
+        ...n,
+        panning: n.panning ?? 100,
+        finePitch: n.finePitch ?? 0,
+        kind,
+      });
+      continue;
+    }
+    integer(n.pitch, 21, 108, "key");
+    if (n.velocity > 100) {
+      repairedVelocities.set(
+        n.velocity,
+        (repairedVelocities.get(n.velocity) ?? 0) + 1,
+      );
+      n.velocity = 100;
+    }
+    if ((n.panning ?? 100) > 200) {
+      warnings.push(
+        `音符的声像 ${n.panning} 超出 NBS 0–200 范围，已规范为 200；音符未删除。`,
+      );
+      n.panning = 200;
+    }
+    ordinaryNotes.push(n);
+  }
+  for (const [value, count] of repairedVelocities)
+    warnings.push(
+      `${count} 个音符的力度 ${value} 超出 NBS 0–100 范围，已规范为 100；音符未删除。`,
+    );
+  if (controlEvents.some((e) => e.kind === "visual"))
+    warnings.push("视觉控制事件已保留；当前不会执行视觉效果或保存文件操作。");
   if (copper.size)
     warnings.push(
       "NBS v6 铜号（Trumpet）已保留为具名自定义乐器，导出 v5 时需附带对应音频采样；未用其他音色替代。",
@@ -320,7 +353,7 @@ export function decodeNbs(data: Uint8Array): NbsProject {
         id: "nbs-pattern",
         name: title || "Imported NBS",
         length: patternLength,
-        notes,
+        notes: ordinaryNotes,
       },
     ],
     clips: [{ id: "nbs-clip", patternId: "nbs-pattern", tick: 0, track: 0 }],
@@ -346,6 +379,7 @@ export function decodeNbs(data: Uint8Array): NbsProject {
       customInstruments,
       rawStrings,
       warnings,
+      ...(controlEvents.length ? { controlEvents } : {}),
     },
   };
 }
@@ -376,6 +410,42 @@ export function encodeNbs(project: Project): Uint8Array {
       integer(n.layer, 0, 4095, "layer");
       while (layers.length <= n.layer) layers.push(defaultLayer());
     }
+  for (const event of meta?.controlEvents ?? []) {
+    integer(event.tick, 0, 65535, "v5 control tick");
+    integer(event.layer, 0, 4095, "control layer");
+    integer(
+      event.instrument,
+      16,
+      Math.min(255, vanilla + custom.length - 1),
+      "control instrument",
+    );
+    if (
+      getNbsEventKind(custom[event.instrument - 16]?.name ?? "") !== event.kind
+    )
+      throw new Error(
+        "NBS control instrument kind does not match its definition",
+      );
+    integer(event.pitch, 21, 276, "control key");
+    integer(event.velocity, 0, 255, "control velocity");
+    integer(event.panning, 0, 255, "control panning");
+    integer(event.finePitch, -32768, 32767, "control fine pitch");
+    while (layers.length <= event.layer) layers.push(defaultLayer());
+    const used = occupied.get(event.tick) ?? new Set<number>();
+    if (used.has(event.layer))
+      throw new Error("NBS control events collide at the same tick and layer");
+    used.add(event.layer);
+    occupied.set(event.tick, used);
+    notes.push({ ...event });
+    length = Math.max(length, event.tick);
+    if (notes.length > MAX_NOTES)
+      throw new Error("NBS export exceeds 500,000 records");
+  }
+  const stopRanges = (meta?.controlEvents ?? [])
+    .map(stopRangeForEvent)
+    .filter(
+      (range): range is { start: number; end: number } =>
+        !!range && range.start !== 0,
+    );
   const overflow = new Map<number, number[]>();
   for (const clip of project.clips) {
     const pattern = patterns.get(clip.patternId);
@@ -401,6 +471,14 @@ export function encodeNbs(project: Project): Uint8Array {
       occupied.set(tick, used);
       let layer = n.layer;
       if (used.has(layer)) {
+        if (
+          stopRanges.some(
+            (range) => n.layer + 1 >= range.start && n.layer + 1 <= range.end,
+          )
+        )
+          throw new Error(
+            "NBS Sound Stopper target layers cannot be preserved after note collision; resolve overlapping notes before export",
+          );
         const candidates = overflow.get(n.layer) ?? [];
         layer = candidates.find((x) => !used.has(x)) ?? layers.length;
         if (layer === layers.length) {
@@ -480,6 +558,13 @@ export function encodeNbs(project: Project): Uint8Array {
     index = 0;
   while (index < notes.length) {
     const tick = notes[index].tick;
+    // A first event at tick 65535 is a delta of 65536 from the -1 origin.
+    // Empty tick columns bridge that delta without moving the actual event.
+    while (tick - previousTick > 65535) {
+      short(65535);
+      short(0);
+      previousTick += 65535;
+    }
     short(tick - previousTick);
     previousTick = tick;
     let previousLayer = -1;

@@ -1,3 +1,4 @@
+import { getNbsEventKind } from "./nbsEvents";
 import type { Command, Layer, Pattern, Project, Snapshot } from "./model";
 
 const MAX_TICK = 1_048_576;
@@ -300,15 +301,28 @@ export function validateProject(value: unknown): Project {
   for (const raw of arr(p.instruments, 256)) {
     const i = obj(raw),
       id = num(i.id, 0, 255, true);
+    if (
+      getNbsEventKind(
+        (p.nbs as Project["nbs"])?.customInstruments?.[id - 16]?.name ?? "",
+      )
+    )
+      fail("控制协议乐器编号不能用于发声乐器");
     if (instruments.has(id)) fail();
     instruments.add(id);
     str(i.name);
+    if (id >= 16 && getNbsEventKind(i.name as string))
+      fail("此名称为 NBS 控制协议保留名称，不能用于发声乐器");
     if (!samples.has(str(i.sampleId, 128))) fail("乐器引用的采样不存在");
     num(i.key, 0, 255, true);
     bool(i.pressKey);
     if (i.mappingTargetId !== undefined) num(i.mappingTargetId, 0, 255, true);
   }
   for (const raw of p.instruments as Project["instruments"]) {
+    const control = getNbsEventKind(
+      (p.nbs as Project["nbs"])?.customInstruments?.[raw.id - 16]?.name ?? "",
+    );
+    if (control && raw.mappingTargetId !== undefined)
+      fail("控制乐器不能映射为发声音色");
     if (raw.mappingTargetId === undefined) continue;
     const target = (p.instruments as Project["instruments"]).find(
       (i) => i.id === raw.mappingTargetId,
@@ -318,6 +332,10 @@ export function validateProject(value: unknown): Project {
     );
     if (
       !target ||
+      getNbsEventKind(
+        (p.nbs as Project["nbs"])?.customInstruments?.[target.id - 16]?.name ??
+          "",
+      ) ||
       target.id === raw.id ||
       target.mappingTargetId !== undefined ||
       !sample ||
@@ -408,8 +426,67 @@ export function validateProject(value: unknown): Project {
   if (p.nbs !== undefined) {
     const n = obj(p.nbs);
     num(n.version, 0, 6, true);
-    arr(n.customInstruments, 255);
-    arr(n.layers, 4096);
+    num(n.vanillaInstrumentCount, 1, 20, true);
+    for (const key of ["author", "originalAuthor", "description", "midiFile"])
+      str(n[key], 1024 * 1024);
+    for (const key of ["autosave", "autosaveMinutes", "maxLoopCount"])
+      num(n[key], 0, 255, true);
+    num(n.timeSignature, 1, 32, true);
+    num(n.loop, 0, 1, true);
+    num(n.loopStartTick, 0, 65535, true);
+    for (const key of [
+      "minutesSpent",
+      "leftClicks",
+      "rightClicks",
+      "notesAdded",
+      "notesRemoved",
+    ])
+      num(n[key], -2147483648, 2147483647, true);
+    for (const raw of arr(n.customInstruments, 255)) {
+      const c = obj(raw);
+      str(c.name, 1024 * 1024);
+      str(c.file, 1024 * 1024);
+      num(c.key, 0, 255, true);
+      num(c.pressKey, 0, 1, true);
+    }
+    for (const raw of arr(n.layers, 4096)) {
+      const l = obj(raw);
+      str(l.name, 1024 * 1024);
+      num(l.locked, 0, 2, true);
+      num(l.volume, 0, 100, true);
+      num(l.panning, 0, 200, true);
+    }
+    for (const raw of Object.values(obj(n.rawStrings))) {
+      const r = obj(raw);
+      str(r.text, 1024 * 1024);
+      for (const byte of arr(r.bytes, 1024 * 1024)) num(byte, 0, 255, true);
+    }
+    for (const warning of arr(n.warnings, 500_000)) str(warning, 1024 * 1024);
+    if (n.controlEvents !== undefined)
+      fail("控制事件必须存储在工程 nbsEvents 中");
+  }
+  if (p.nbsEvents !== undefined) {
+    const ids = new Set<string | number>();
+    for (const raw of arr(p.nbsEvents, 500_000)) {
+      const e = obj(raw);
+      unique(e.id, ids);
+      num(e.tick, 0, MAX_TICK - 1, true);
+      num(e.layer, 0, 4095, true);
+      const instrument = num(e.instrument, 16, 255, true);
+      const definition = (p.nbs as Project["nbs"])?.customInstruments[
+        instrument - 16
+      ];
+      if (
+        !definition ||
+        !getNbsEventKind(definition.name) ||
+        getNbsEventKind(definition.name) !== e.kind
+      )
+        fail("控制事件引用的协议乐器不存在或类型不匹配");
+      num(e.pitch, 21, 276, true);
+      num(e.velocity, 0, 255, true);
+      num(e.panning, 0, 255, true);
+      num(e.finePitch, -32768, 32767, true);
+    }
   }
   if (p.importOrganization !== undefined) {
     const info = obj(p.importOrganization);

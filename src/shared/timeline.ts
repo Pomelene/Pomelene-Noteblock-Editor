@@ -5,6 +5,8 @@ import {
   type Pattern,
   type Project,
 } from "./model";
+import { buildTempoMap, type TempoMap } from "./tempo";
+import { stopRangeForEvent } from "./nbsEvents";
 
 /** One sample trigger. Durations are playback windows, never stretch or repeat counts. */
 export interface AudioEvent {
@@ -18,8 +20,10 @@ export interface AudioEvent {
   playbackRate: number;
   gain: number;
   pan: number;
+  /** Original one-based NBS layer identity, independent of pattern segmentation. */
+  sourceLayer?: number;
 }
-export interface EventPlan {
+export interface EventPlan extends TempoMap {
   events: AudioEvent[];
   endTick: number;
   secondsPerTick: number;
@@ -98,8 +102,7 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
     const solo = pattern.layers.some((l) => l.solo);
     for (const note of pattern.notes) {
       const layer = pattern.layers[note.layer];
-      if (!layer || layer.locked || layer.muted || (solo && !layer.solo))
-        continue;
+      if (!layer || layer.muted || (solo && !layer.solo)) continue;
       if (
         note.tick < offset ||
         note.tick >= offset + length ||
@@ -111,6 +114,7 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
         ...event,
         id: `${id}:${note.id}`,
         tick: tick + note.tick - offset,
+        sourceLayer: (layer.sourceIndex ?? note.layer) + 1,
         durationTicks:
           tailTicks !== undefined
             ? Math.max(0, tailTicks - (note.tick - offset))
@@ -144,10 +148,9 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
       });
     }
   } else {
-    endTick = Math.max(
-      ticksPerBar(project.meter),
-      ...project.clips.map((c) => c.tick + c.length),
-    );
+    endTick = ticksPerBar(project.meter);
+    for (const clip of project.clips)
+      endTick = Math.max(endTick, clip.tick + clip.length);
     const solo = project.tracks.some((t) => t.solo);
     for (const clip of project.clips) {
       const track = project.tracks[clip.track];
@@ -184,5 +187,78 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
     }
   }
   events.sort((a, b) => a.tick - b.tick);
-  return { events, endTick, secondsPerTick };
+  if (scope === "song") {
+    capStoppedTails(events, project);
+    for (const control of project.nbsEvents ?? [])
+      endTick = Math.max(endTick, control.tick + 1);
+  }
+  return {
+    events,
+    endTick,
+    secondsPerTick,
+    ...buildTempoMap(project.bpm, scope === "song" ? project.nbsEvents : []),
+  };
+}
+
+/** Reverse sweep: range-min updates and point queries avoid notes × controls work. */
+function capStoppedTails(events: AudioEvent[], project: Project) {
+  const stops = (project.nbsEvents ?? [])
+    .flatMap((event) => {
+      const range = stopRangeForEvent(event);
+      return range ? [{ tick: event.tick, ...range }] : [];
+    })
+    .sort((a, b) => b.tick - a.tick);
+  if (!stops.length) return;
+  const layers = [
+    ...new Set(
+      events.flatMap((e) =>
+        e.sourceLayer === undefined ? [] : [e.sourceLayer],
+      ),
+    ),
+  ].sort((a, b) => a - b);
+  if (!layers.length) return;
+  let size = 1;
+  while (size < layers.length) size *= 2;
+  const cuts = new Float64Array(size * 2).fill(Infinity);
+  function lower(value: number) {
+    let lo = 0,
+      hi = layers.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (layers[mid] < value) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+  let next = 0;
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i];
+    // A stopper executes before new triggers on its tick, so only strictly earlier notes are cut.
+    while (next < stops.length && stops[next].tick > event.tick) {
+      const stop = stops[next++];
+      let left = (stop.start === 0 ? 0 : lower(stop.start)) + size;
+      let right =
+        (stop.start === 0 ? layers.length : lower(stop.end + 1)) + size;
+      while (left < right) {
+        if (left & 1) {
+          cuts[left] = Math.min(cuts[left], stop.tick);
+          left++;
+        }
+        if (right & 1) {
+          --right;
+          cuts[right] = Math.min(cuts[right], stop.tick);
+        }
+        left >>>= 1;
+        right >>>= 1;
+      }
+    }
+    if (event.sourceLayer === undefined) continue;
+    let node = lower(event.sourceLayer) + size,
+      cut = Infinity;
+    while (node) {
+      cut = Math.min(cut, cuts[node]);
+      node >>>= 1;
+    }
+    event.durationTicks = Math.min(event.durationTicks, cut - event.tick);
+  }
 }

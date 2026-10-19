@@ -15,6 +15,8 @@ import type {
   NbsImportSummary,
 } from "../shared/model";
 import { organizeImportedProject } from "../shared/smartPattern";
+import { isProjectV2 } from "../shared/projectCodec";
+import { getNbsEventKind } from "../shared/nbsEvents";
 import type { ImportChoice } from "./importBroker";
 import { Session, createEmptyProject, uid } from "../shared/session";
 import {
@@ -95,7 +97,7 @@ export function nativeFileDialogs(
           filters: [
             kind === "project"
               ? {
-                  name: "Pomelene Noteblock Project / NBS Song",
+                  name: "Pomelene Noteblock Project v2 / NBS Song",
                   extensions: ["nbproject", "nbs"],
                 }
               : kind === "phrase"
@@ -140,7 +142,7 @@ export function nativeFileDialogs(
             {
               name:
                 format === "project"
-                  ? "Pomelene Noteblock Project"
+                  ? "Pomelene Noteblock Project v2"
                   : format === "nbs"
                     ? "Note Block Song"
                     : "Instrument audio ZIP",
@@ -338,11 +340,17 @@ export class ProjectFiles {
         const bytes = await this.storage.read(path),
           warnings: string[] = [];
         let project = decodeProject(bytes, path);
-        const isProject = /^\s*\{/.test(new TextDecoder().decode(bytes));
+        const isProject = isProjectV2(bytes);
         if (!isProject && !this.options.chooseImport)
           warnings.push(...(project.nbs?.warnings ?? []));
         if (!isProject && this.options.chooseImport) {
           const organized = organizeImportedProject(project);
+          if (project.nbsEvents?.length) {
+            const events = project.nbsEvents;
+            organized.summary.warnings.push(
+              `保留 ${events.length} 个整曲 NBS 控制事件：速度 ${events.filter((e) => e.kind === "tempo").length}，停止 ${events.filter((e) => e.kind === "stop").length}，视觉 ${events.filter((e) => e.kind === "visual").length}。可在资源栏查看 tick / 图层位置；视觉效果仅保留、不执行，Show Save Popup 不会保存文件。`,
+            );
+          }
           organized.summary.fileName = basename(path);
           if (organized.project.importOrganization)
             organized.project.importOrganization.summary = structuredClone(
@@ -359,7 +367,7 @@ export class ProjectFiles {
         await this.resolveSamples(project, dirname(path), warnings, false);
         if (!(await this.mayReplace())) return this.result(false);
         this.options.session.replace(project);
-        // Only JSON projects may become the Ctrl+S target. A binary song can
+        // Only v2 projects may become the Ctrl+S target. An NBS song can
         // have any extension, including one selected through “all files”.
         if (isProject) this.options.session.markSaved(path);
         this.options.onReplace?.();
@@ -377,6 +385,7 @@ export class ProjectFiles {
           entries = new Map<string, Uint8Array>(),
           warnings: string[] = [];
         for (const i of p.instruments.filter((i) => i.id >= 16)) {
+          if (getNbsEventKind(i.name)) continue;
           const sample = p.samples.find((s) => s.id === i.sampleId)!;
           if (
             !sample.dataUrl &&
@@ -408,10 +417,10 @@ export class ProjectFiles {
           }
           entries.set(relative, data);
         }
-        if (!entries.size && warnings.length)
+        if (!entries.size)
           return this.result(true, [
             ...warnings,
-            "当前映射使用现有内置音色，无需导出外部采样包；没有创建 ZIP 文件。",
+            "当前工程无需导出外部音频；NBS 控制定义随歌曲和工程保留，没有创建 ZIP 文件。",
           ]);
         const data = writeAudioZip(entries),
           path = await this.dialogs.save(
@@ -462,6 +471,10 @@ export class ProjectFiles {
     if (isAudioPath(path))
       throw new Error("音频资源不能导入为 NBS 音符片段采样");
     const imported = fromNbs(bytes);
+    if (imported.nbsEvents?.length)
+      throw new Error(
+        "此 NBS 含整曲控制事件，无法导入为片段采样。请使用“打开工程 / NBS”打开整首歌曲，以保留速度、停止和视觉控制事件；当前工程未更改。",
+      );
     warnings.push(...(imported.nbs?.warnings ?? []));
     await this.resolveSamples(imported, dirname(path), warnings, false);
     const capture = new Session(imported).dispatch({
@@ -512,7 +525,11 @@ export class ProjectFiles {
             oldId < 16 && !p.instruments.some((i) => i.id === oldId)
               ? oldId
               : Array.from({ length: 240 }, (_, index) => index + 16).find(
-                  (id) => !p.instruments.some((i) => i.id === id),
+                  (id) =>
+                    !p.instruments.some((i) => i.id === id) &&
+                    !getNbsEventKind(
+                      p.nbs?.customInstruments[id - 16]?.name ?? "",
+                    ),
                 );
           if (id === undefined) throw new Error("自定义乐器已达到 240 个上限");
           p.instruments.push({ ...instrument, id, sampleId: sample.id });
@@ -531,10 +548,22 @@ export class ProjectFiles {
     warnings: string[],
     ask: boolean,
   ): Promise<void> {
+    const audioSample = (id: string) => {
+      const definitions = project.instruments.filter((i) => i.sampleId === id);
+      return (
+        !definitions.length || definitions.some((i) => !getNbsEventKind(i.name))
+      );
+    };
     const missing = async () => {
       let total = 0;
       for (const sample of project.samples) {
-        if (sample.builtin || sample.dataUrl || !sample.originalPath) continue;
+        if (
+          !audioSample(sample.id) ||
+          sample.builtin ||
+          sample.dataUrl ||
+          !sample.originalPath
+        )
+          continue;
         let relative: string;
         try {
           relative = safeRelativePath(sample.originalPath);
@@ -568,14 +597,19 @@ export class ProjectFiles {
       }
     };
     await missing();
-    if (ask && project.samples.some((s) => !s.builtin && !s.dataUrl)) {
+    if (
+      ask &&
+      project.samples.some((s) => audioSample(s.id) && !s.builtin && !s.dataUrl)
+    ) {
       const root = await this.dialogs.sounds();
       if (root) {
         this.soundsRoots.unshift(root);
         await missing();
       }
     }
-    const unresolved = project.samples.filter((s) => !s.builtin && !s.dataUrl);
+    const unresolved = project.samples.filter(
+      (s) => audioSample(s.id) && !s.builtin && !s.dataUrl,
+    );
     if (unresolved.length)
       warnings.push(
         `${unresolved.length} 个自定义采样尚未找到。可导入上游 ZIP 采样包按路径自动关联：${unresolved
@@ -638,6 +672,13 @@ export class ProjectFiles {
       );
     } else {
       const imported = fromNbs(bytes);
+      if (
+        imported.nbsEvents?.length ||
+        imported.nbs?.customInstruments.some((i) => getNbsEventKind(i.name))
+      )
+        warnings.push(
+          "乐器资源导入只关联发声乐器；此 NBS 的整曲控制事件和控制定义未加入当前工程。请使用“打开工程 / NBS”打开整首歌曲，以完整保留控制信息。",
+        );
       await this.resolveSamples(imported, dirname(path), warnings, true);
       this.options.session.transact((p) => {
         for (const inst of imported.instruments.filter((i) => i.id >= 16)) {
@@ -655,8 +696,12 @@ export class ProjectFiles {
             if (source.dataUrl) sample.dataUrl = source.dataUrl;
             continue;
           }
-          const id = Math.max(15, ...p.instruments.map((i) => i.id)) + 1;
-          if (id > 255) throw new Error("自定义乐器已达到 240 个上限");
+          const id = Array.from({ length: 240 }, (_, index) => index + 16).find(
+            (id) =>
+              !p.instruments.some((i) => i.id === id) &&
+              !getNbsEventKind(p.nbs?.customInstruments[id - 16]?.name ?? ""),
+          );
+          if (id === undefined) throw new Error("自定义乐器已达到 240 个上限");
           const reusable = p.samples.find(
             (s) =>
               s.originalPath &&

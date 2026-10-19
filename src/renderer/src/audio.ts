@@ -12,6 +12,7 @@ import {
   type AudioEvent,
   type EventPlan,
 } from "../../shared/timeline";
+import { buildTempoMap, type TempoMap } from "../../shared/tempo";
 
 type Bridge = Pick<StudioAPI, "audioSignal" | "onAudioSignal">;
 interface EngineOptions {
@@ -127,10 +128,10 @@ export class AudioEngine {
     if (this.state.status !== "playing" || !this.running || !this.context)
       return this.state.tick;
     const r = this.running;
-    const raw = Math.max(
-      r.tick,
-      r.tick + (this.context.currentTime - r.time) / r.plan.secondsPerTick,
-    );
+    const seconds =
+      r.plan.tickToSeconds(r.tick) +
+      Math.max(0, this.context.currentTime - r.time);
+    const raw = r.plan.secondsToTick(seconds);
     const loop = this.project?.loop,
       end = this.boundary(r.plan);
     if (
@@ -139,7 +140,11 @@ export class AudioEngine {
       loop.end > loop.start &&
       raw >= end
     ) {
-      return loop.start + ((raw - end) % (loop.end - loop.start));
+      const startSeconds = r.plan.tickToSeconds(loop.start);
+      const endSeconds = r.plan.tickToSeconds(end);
+      return r.plan.secondsToTick(
+        startSeconds + ((seconds - endSeconds) % (endSeconds - startSeconds)),
+      );
     }
     return Math.min(end, raw);
   }
@@ -200,18 +205,21 @@ export class AudioEngine {
     event: AudioEvent,
     buffer: AudioBuffer,
     when: number,
-    elapsedTicks: number,
+    actualTick: number,
     secondsPerTick: number,
-    maxTicks = Infinity,
+    timing: TempoMap,
+    endTick = Infinity,
   ) {
     const ctx = this.audioContext();
     const offset =
       event.offsetTicks * secondsPerTick +
-      elapsedTicks * secondsPerTick * event.playbackRate;
+      (timing.tickToSeconds(actualTick) - timing.tickToSeconds(event.tick)) *
+        event.playbackRate;
     const duration = Math.min(
-      (event.durationTicks - elapsedTicks) * secondsPerTick,
+      timing.tickToSeconds(
+        Math.min(event.tick + event.durationTicks, endTick),
+      ) - timing.tickToSeconds(actualTick),
       (buffer.duration - offset) / event.playbackRate,
-      maxTicks * secondsPerTick,
     );
     if (
       !(duration > 0) ||
@@ -259,14 +267,18 @@ export class AudioEngine {
         const actualTick = Math.max(
           event.tick,
           r.scheduleTick,
-          r.scheduleTick +
-            (ctx.currentTime - r.scheduleTime) / r.plan.secondsPerTick,
+          r.plan.secondsToTick(
+            r.plan.tickToSeconds(r.scheduleTick) +
+              ctx.currentTime -
+              r.scheduleTime,
+          ),
         );
         if (actualTick >= end) break;
         const when = Math.max(
           ctx.currentTime,
           r.scheduleTime +
-            (actualTick - r.scheduleTick) * r.plan.secondsPerTick,
+            r.plan.tickToSeconds(actualTick) -
+            r.plan.tickToSeconds(r.scheduleTick),
         );
         if (when >= horizon) break;
         r.next++;
@@ -275,13 +287,16 @@ export class AudioEngine {
           event,
           r.buffers.get(event.sampleId)!,
           when,
-          actualTick - event.tick,
+          actualTick,
           r.plan.secondsPerTick,
-          end - actualTick,
+          r.plan,
+          end,
         );
       }
       const boundaryTime =
-        r.scheduleTime + (end - r.scheduleTick) * r.plan.secondsPerTick;
+        r.scheduleTime +
+        r.plan.tickToSeconds(end) -
+        r.plan.tickToSeconds(r.scheduleTick);
       if (!looping || boundaryTime >= horizon) break;
       r.scheduleTick = loop!.start;
       r.scheduleTime = boundaryTime;
@@ -453,7 +468,14 @@ export class AudioEngine {
       const sample = project.samples.find((s) => s.id === event.sampleId)!;
       const buffer = await this.buffer(sample);
       if (generation === this.generation)
-        this.sound(event, buffer, ctx.currentTime, 0, 60 / project.bpm / 4);
+        this.sound(
+          event,
+          buffer,
+          ctx.currentTime,
+          event.tick,
+          60 / project.bpm / 4,
+          buildTempoMap(project.bpm),
+        );
     } catch (error) {
       if (generation === this.generation)
         this.setState({

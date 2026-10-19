@@ -24,10 +24,14 @@ function audible(project: Project) {
   return {
     endTick: p.endTick,
     secondsPerTick: p.secondsPerTick,
+    endSeconds: p.tickToSeconds(p.endTick),
     events: p.events
       .map(({ id, ...e }) => e)
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   };
+}
+function controls(project: Project) {
+  return (project.nbsEvents ?? []).map(({ id: _id, ...event }) => event);
 }
 for (const entry of (
   await readdir(corpus, { withFileTypes: true, recursive: true })
@@ -45,7 +49,8 @@ for (const entry of (
       organizing = performance.now(),
       out = organizeImportedProject(original),
       organizeMilliseconds = Math.round(performance.now() - organizing);
-    let sessionError = "", projectBytes = 0;
+    let sessionError = "",
+      projectBytes = 0;
     try {
       projectBytes = encodeProject(out.project).byteLength;
     } catch (e) {
@@ -59,8 +64,13 @@ for (const entry of (
       audible(original),
       audible(out.project),
     );
+    const controlsPreserved = isDeepStrictEqual(
+      controls(original),
+      controls(out.project),
+    );
     let exportable = false,
       exportPreserved = false,
+      controlExportPreserved = false,
       exportError = "";
     try {
       const exported = fromNbs(toNbs(out.project).data);
@@ -71,6 +81,10 @@ for (const entry of (
       exportPreserved = isDeepStrictEqual(
         collectMusicalEvents(baseline),
         collectMusicalEvents(exported),
+      );
+      controlExportPreserved = isDeepStrictEqual(
+        controls(baseline),
+        controls(exported),
       );
     } catch (e) {
       exportError = String(e);
@@ -92,8 +106,11 @@ for (const entry of (
       applied: out.summary.applicable,
       preserved,
       audioPreserved,
+      controls: original.nbsEvents?.length ?? 0,
+      controlsPreserved,
       exportable,
       exportPreserved,
+      controlExportPreserved,
       exportError,
       warnings: out.summary.warnings,
     };
@@ -102,8 +119,10 @@ for (const entry of (
     if (
       !preserved ||
       !audioPreserved ||
+      !controlsPreserved ||
       !exportable ||
       !exportPreserved ||
+      !controlExportPreserved ||
       sessionError
     )
       process.exitCode = 1;

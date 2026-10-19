@@ -139,7 +139,7 @@ describe("event plans", () => {
       2 ** (13 / 12),
     );
   });
-  it("honors layer lock, mute and solo plus track mute/solo and clip mute", () => {
+  it("keeps locked layers audible and honors mute/solo at layer, track and clip levels", () => {
     const p = fixture();
     p.patterns[0].layers.push({
       ...p.patterns[0].layers[0],
@@ -155,7 +155,9 @@ describe("event plans", () => {
       "pattern:solo-note",
     ]);
     p.patterns[0].layers[1].locked = true;
-    expect(buildEvents(p, "pattern").events).toEqual([]);
+    expect(buildEvents(p, "pattern").events.map((e) => e.id)).toEqual([
+      "pattern:solo-note",
+    ]);
     p.patterns[0].layers[1].locked = false;
     p.patterns[0].layers[1].muted = true;
     expect(buildEvents(p, "pattern").events).toEqual([]);
@@ -255,4 +257,112 @@ it("treats a sample source as a transport scope at its natural duration", () => 
   expect(
     plan.events.map((e) => [e.id, e.sampleId, e.playbackRate, e.durationTicks]),
   ).toEqual([["harp:sample", "harp", 1, 16]]);
+});
+
+it("integrates stable global tempo changes with inverse tick conversions and fixed previews", () => {
+  const p = fixture();
+  p.nbsEvents = [
+    {
+      id: "late",
+      kind: "tempo",
+      tick: 8,
+      layer: 0,
+      instrument: 16,
+      pitch: 66,
+      velocity: 100,
+      panning: 100,
+      finePitch: 60,
+    },
+    {
+      id: "same",
+      kind: "tempo",
+      tick: 8,
+      layer: 0,
+      instrument: 16,
+      pitch: 66,
+      velocity: 100,
+      panning: 100,
+      finePitch: -240,
+    },
+    {
+      id: "invalid",
+      kind: "tempo",
+      tick: 9,
+      layer: 0,
+      instrument: 16,
+      pitch: 66,
+      velocity: 100,
+      panning: 100,
+      finePitch: 0,
+    },
+  ];
+  const plan = buildEvents(p);
+  expect(plan.tickToSeconds(16)).toBeCloseTo(1.5);
+  expect(plan.secondsToTick(1.25)).toBeCloseTo(12);
+  expect(plan.tickToSeconds(Infinity)).toBe(Infinity);
+  expect(buildEvents(p, "pattern").tickToSeconds(16)).toBe(2);
+});
+
+it("cuts only prior notes in inclusive original stopper layers, preserving same-tick notes", () => {
+  const p = fixture();
+  const pattern = p.patterns[0];
+  pattern.layers[0].sourceIndex = 4;
+  pattern.layers.push({
+    ...pattern.layers[0],
+    id: "elsewhere",
+    sourceIndex: 7,
+  });
+  pattern.notes = [
+    { ...pattern.notes[0], id: "prior", tick: 0 },
+    { ...pattern.notes[0], id: "other", tick: 0, layer: 1 },
+    { ...pattern.notes[0], id: "new", tick: 2 },
+  ];
+  p.clips = [
+    {
+      id: "c",
+      kind: "pattern",
+      sourceId: pattern.id,
+      tick: 0,
+      length: 8,
+      offset: 0,
+      track: 0,
+      muted: false,
+    },
+  ];
+  p.nbsEvents = [
+    {
+      id: "cut",
+      kind: "stop",
+      tick: 2,
+      layer: 0,
+      instrument: 17,
+      pitch: 66,
+      velocity: 100,
+      panning: 105,
+      finePitch: 5,
+    },
+  ];
+  expect(buildEvents(p).events.map((e) => [e.id, e.durationTicks])).toEqual([
+    ["c:prior", 2],
+    ["c:other", 8],
+    ["c:new", 6],
+  ]);
+  p.nbsEvents[0].finePitch = 0;
+  expect(buildEvents(p).events.map((e) => e.durationTicks)).toEqual([2, 2, 6]);
+  expect(buildEvents(p, pattern.id).events[0].durationTicks).toBe(8);
+});
+
+it("builds large song boundaries without argument-limit failure", () => {
+  const p = fixture();
+  p.clips = Array.from({ length: 150000 }, (_, tick) => ({
+    id: `c${tick}`,
+    kind: "sample" as const,
+    sourceId: "harp",
+    tick,
+    length: 1,
+    offset: 0,
+    track: 0,
+    muted: true,
+  }));
+  expect(buildEvents(p).endTick).toBe(150000);
 });

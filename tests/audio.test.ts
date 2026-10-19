@@ -428,3 +428,141 @@ it("resumes a docked playing transport at its transferred cursor", async () => {
   expect(context.sources[0].started[1]).toBeCloseTo(0.5);
   audio.stop();
 });
+
+it("uses tempo-clock elapsed seconds for seek offsets, durations and precise pause", async () => {
+  setup();
+  const { audio, context } = engine();
+  const p = project();
+  p.nbsEvents = [
+    {
+      id: "tempo",
+      kind: "tempo",
+      tick: 4,
+      layer: 0,
+      instrument: 16,
+      pitch: 66,
+      velocity: 100,
+      panning: 100,
+      finePitch: 240,
+    },
+  ];
+  p.clips[0].offset = 2;
+  await audio.play(p);
+  expect(context.sources[0].stopped[0]).toBeCloseTo(1.275);
+  context.currentTime = 0.775;
+  audio.pause();
+  expect(audio.getState().tick).toBeCloseTo(8);
+  await audio.play(p);
+  expect(context.sources[1].started[1]).toBeCloseTo(1);
+  expect(context.sources[1].stopped[0]).toBeCloseTo(1.3);
+  audio.seek(12);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(context.sources[2].started[1]).toBeCloseTo(1.25);
+  audio.stop();
+});
+
+it("loops over multiple tempo changes at exact audio deadlines and wraps the cursor in seconds", async () => {
+  setup();
+  const { audio, context } = engine();
+  const p = project();
+  p.nbsEvents = [
+    {
+      id: "tempo",
+      kind: "tempo",
+      tick: 2,
+      layer: 0,
+      instrument: 16,
+      pitch: 66,
+      velocity: 100,
+      panning: 100,
+      finePitch: 240,
+    },
+  ];
+  p.nbsEvents.push({
+    ...p.nbsEvents[0],
+    id: "slower",
+    tick: 3,
+    finePitch: 120,
+  });
+  p.loop = { enabled: true, start: 1, end: 4 };
+  await audio.play(p);
+  expect(context.sources[0].stopped[0]).toBeCloseTo(0.4625);
+  context.currentTime = 0.4;
+  await vi.advanceTimersByTimeAsync(25);
+  expect(context.sources[1].started[0]).toBeCloseTo(0.4625);
+  expect(context.sources[1].started[1]).toBeCloseTo(0.125);
+  expect(context.sources[1].stopped[0]).toBeCloseTo(0.775);
+  context.currentTime = 0.7;
+  expect(audio.getState().tick).toBeCloseTo(3.4);
+  audio.stop();
+});
+
+it("stops a prior sample tail on its source layer and keeps new notes on that tick", async () => {
+  setup();
+  const { audio, context } = engine();
+  const p = project();
+  p.patterns = [
+    {
+      id: "p",
+      name: "p",
+      color: "#fff",
+      length: 8,
+      layers: [
+        {
+          id: "l",
+          name: "l",
+          sourceIndex: 4,
+          volume: 100,
+          panning: 100,
+          locked: true,
+          muted: false,
+          solo: false,
+        },
+      ],
+      notes: [0, 2].map((tick) => ({
+        id: `n${tick}`,
+        tick,
+        layer: 0,
+        instrument: 0,
+        pitch: 66,
+        velocity: 100,
+      })),
+    },
+  ];
+  p.clips = [
+    {
+      id: "c",
+      kind: "pattern",
+      sourceId: "p",
+      tick: 0,
+      length: 8,
+      offset: 0,
+      track: 0,
+      muted: false,
+    },
+  ];
+  p.nbsEvents = [
+    {
+      id: "cut",
+      kind: "stop",
+      tick: 2,
+      layer: 0,
+      instrument: 17,
+      pitch: 66,
+      velocity: 100,
+      panning: 105,
+      finePitch: 5,
+    },
+  ];
+  await audio.play(p);
+  expect(context.sources[0].stopped[0]).toBeCloseTo(0.275);
+  context.currentTime = 0.2;
+  await vi.advanceTimersByTimeAsync(25);
+  expect(context.sources[1].started[0]).toBeCloseTo(0.275);
+  expect(context.sources[1].stopped[0]).toBeCloseTo(1.025);
+  audio.seek(3);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(context.sources).toHaveLength(3);
+  expect(context.sources[2].started[1]).toBeCloseTo(0.125);
+  audio.stop();
+});

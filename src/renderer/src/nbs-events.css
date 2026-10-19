@@ -1,0 +1,32 @@
+.nbs-event-summary {
+  margin: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.nbs-event-summary summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.nbs-event-summary summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.nbs-event-summary p {
+  margin: 8px 0;
+}
+.nbs-event-summary ul {
+  padding: 0;
+  list-style: none;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.nbs-event-summary li {
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+}
+.nbs-event-summary li span {
+  display: block;
+}

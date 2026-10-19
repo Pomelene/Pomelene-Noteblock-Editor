@@ -1,3 +1,4 @@
+import type { NbsControlEvent } from "./nbsEvents";
 import type { NbsMetadata } from "../legacy/nbs";
 export interface Note {
   id: string;
@@ -120,6 +121,7 @@ export interface Project {
   clips: Clip[];
   loop: { enabled: boolean; start: number; end: number };
   nbs?: NbsMetadata;
+  nbsEvents?: NbsControlEvent[];
   importOrganization?: ImportOrganization;
 }
 export interface Snapshot {

@@ -1,4 +1,5 @@
 import type { Instrument, Note, Project } from "./model";
+import { getNbsEventKind } from "./nbsEvents";
 const groupedNotes = new WeakMap<Project, Map<number, Note[][]>>();
 function notesByInstrument(project: Project) {
   let result = groupedNotes.get(project);
@@ -34,10 +35,17 @@ export function playableMappingTargets(
   project: Project,
   sourceId: number,
 ): Instrument[] {
+  if (
+    getNbsEventKind(
+      project.instruments.find((i) => i.id === sourceId)?.name ?? "",
+    )
+  )
+    return [];
   return project.instruments
     .filter(
       (i) =>
         i.id !== sourceId &&
+        !getNbsEventKind(i.name) &&
         i.mappingTargetId === undefined &&
         project.samples.some(
           (s) => s.id === i.sampleId && !!(s.builtin || s.dataUrl),
@@ -51,7 +59,7 @@ export function suggestInstrumentMapping(
   id: number,
 ): InstrumentSuggestion | undefined {
   const instrument = project.instruments.find((i) => i.id === id);
-  if (!instrument) return;
+  if (!instrument || getNbsEventKind(instrument.name)) return;
   const sample = project.samples.find((s) => s.id === instrument.sampleId);
   const hint = `${instrument.name} ${sample?.originalPath ?? ""}`
     .toLowerCase()

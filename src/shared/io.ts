@@ -1,16 +1,27 @@
+import { getNbsEventKind } from "./nbsEvents";
 import { decodeNbs, encodeNbs, getNbsExportWarnings } from "../legacy/nbs";
 import type { NbsMetadata, NbsProject } from "../legacy/nbs";
 import type { Project as LegacyProject } from "../legacy/project";
 import type { Pattern, Project } from "./model";
 import { createEmptyProject, newLayer, uid, validateProject } from "./session";
 
-export const MAX_PROJECT_BYTES = 96 * 1024 * 1024;
+import {
+  MAX_PROJECT_BYTES,
+  decodeProjectV2,
+  encodeProjectV2,
+  isProjectContainer,
+} from "./projectCodec";
+export { MAX_PROJECT_BYTES } from "./projectCodec";
 function migrate(old: LegacyProject & { nbs?: NbsMetadata }): Project {
   const p = createEmptyProject();
   p.title = old.title;
   p.bpm = old.bpm;
   p.meter = old.meter;
-  if (old.nbs) p.nbs = old.nbs;
+  if (old.nbs) {
+    const { controlEvents, ...metadata } = old.nbs;
+    p.nbs = metadata;
+    if (controlEvents?.length) p.nbsEvents = structuredClone(controlEvents);
+  }
   p.patterns = old.patterns.map((pattern) => {
     const height = pattern.notes.reduce(
       (max, n) => Math.max(max, n.layer + 1),
@@ -30,7 +41,9 @@ function migrate(old: LegacyProject & { nbs?: NbsMetadata }): Project {
           ...(l
             ? {
                 name: l.name,
-                locked: l.locked !== 0,
+                locked: l.locked === 1,
+                solo: l.locked === 2,
+                sourceIndex: i,
                 volume: l.volume,
                 panning: l.panning,
               }
@@ -58,6 +71,7 @@ function migrate(old: LegacyProject & { nbs?: NbsMetadata }): Project {
       name: `轨道 ${p.tracks.length + 1}`,
     });
   for (const [index, c] of (old.nbs?.customInstruments ?? []).entries()) {
+    if (index + 16 > 255 || getNbsEventKind(c.name)) continue;
     const id = 16 + index,
       sampleId = `custom-${id}`;
     p.samples.push({
@@ -94,36 +108,17 @@ export function fromNbs(data: Uint8Array): Project {
 export function decodeProject(bytes: Uint8Array, filename?: string): Project {
   if (!(bytes instanceof Uint8Array) || bytes.byteLength > MAX_PROJECT_BYTES)
     throw new Error("工程文件超过 96 MiB 限制");
-  let text: string | undefined;
-  try {
-    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    /* NBS contains arbitrary byte strings. */
-  }
-  if (text && /^\s*\{/.test(text)) {
-    const parsed = JSON.parse(text);
-    if (parsed?.schema === 2) return validateProject(parsed);
-    if (parsed?.format !== "note-block-project")
-      throw new Error("不支持此工程文件格式");
-    if (parsed.version === 2) return validateProject(parsed.project);
-    if (parsed.version === 1) return migrate(parsed.project);
-    throw new Error("不支持此工程文件版本");
-  }
-  if (filename?.toLowerCase().endsWith(".nbproject"))
-    throw new Error("工程文件损坏");
+  if (isProjectContainer(bytes)) return decodeProjectV2(bytes);
+  if (filename?.toLowerCase().endsWith(".nbs")) return fromNbs(bytes);
+  if (
+    filename?.toLowerCase().endsWith(".nbproject") ||
+    /^\s*\{\s*"/.test(new TextDecoder().decode(bytes.subarray(0, 256)))
+  )
+    throw new Error("仅支持带版本标识的 v2 工程；旧工程格式不再支持");
   return fromNbs(bytes);
 }
 export function encodeProject(project: Project): Uint8Array {
-  const bytes = new TextEncoder().encode(
-    JSON.stringify({
-      format: "note-block-project",
-      version: 2,
-      project: validateProject(project),
-    }) + "\n",
-  );
-  if (bytes.length > MAX_PROJECT_BYTES)
-    throw new Error("工程文件超过 96 MiB 限制");
-  return bytes;
+  return encodeProjectV2(project);
 }
 export function toNbs(input: Project): {
   data: Uint8Array;
@@ -143,16 +138,21 @@ export function toNbs(input: Project): {
     warnings.push(
       "采样的预听音量、声像和基准设置仅随工程保存；NBS 导出使用音符、图层和自定义乐器调音设置。",
     );
-  const definitions = custom.map((i) => {
+  // Protocol definitions retain their slots without ordinary sample resources.
+  const definitions = structuredClone(project.nbs?.customInstruments ?? []);
+  for (const i of custom) {
     const sample = project.samples.find((s) => s.id === i.sampleId)!;
-    const old = project.nbs?.customInstruments[i.id - 16];
-    return {
+    const index = i.id - 16;
+    const old = definitions[index];
+    const destination = old ? index : definitions.length;
+    customIds.set(i.id, 16 + destination);
+    definitions[destination] = {
       name: i.name,
       file: sample.originalPath ?? old?.file ?? `${sample.name}.wav`,
       key: i.key,
       pressKey: Number(i.pressKey),
     };
-  });
+  }
   if (
     custom.some(
       (i) => project.samples.find((s) => s.id === i.sampleId)?.dataUrl,
@@ -185,6 +185,9 @@ export function toNbs(input: Project): {
     warnings: [],
     ...project.nbs,
   };
+  delete meta.controlEvents;
+  if (project.nbsEvents?.length)
+    meta.controlEvents = structuredClone(project.nbsEvents);
   meta.layers = [];
   meta.customInstruments = definitions;
   meta.loop = Number(project.loop.enabled);

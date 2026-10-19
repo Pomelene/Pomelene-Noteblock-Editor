@@ -1,8 +1,54 @@
 import { expect, it } from "vitest";
 import { ProjectFiles, type FileDialogs } from "../src/main/files";
 import { createDemoProject, Session } from "../src/shared/session";
-import { toNbs } from "../src/shared/io";
+import { fromNbs, toNbs } from "../src/shared/io";
 import { buildEvents } from "../src/shared/timeline";
+
+it("rejects control-bearing phrases before resource lookup and preserves the current document", async () => {
+  const imported = fromNbs(toNbs(createDemoProject()).data);
+  imported.nbs = {
+    ...imported.nbs!,
+    customInstruments: [
+      { name: "Show Save Popup", file: "missing.ogg", key: 45, pressKey: 0 },
+    ],
+  };
+  imported.nbsEvents = [
+    {
+      id: "popup",
+      tick: 16,
+      layer: 0,
+      instrument: 16,
+      pitch: 66,
+      velocity: 100,
+      panning: 100,
+      finePitch: 0,
+      kind: "visual",
+    },
+  ];
+  const bytes = toNbs(imported).data;
+  const s = new Session(createDemoProject());
+  s.markSaved("host.nbproject");
+  const before = s.snapshot(),
+    reads: string[] = [];
+  const files = new ProjectFiles({
+    session: s,
+    dialogs: dialogs(async () => "/controls.nbs"),
+    storage: {
+      read: async (path) => {
+        reads.push(path);
+        return bytes;
+      },
+      write: async () => {
+        throw Error("must never write");
+      },
+    },
+  });
+  await expect(files.action("importPhrase")).rejects.toThrow(
+    /控制事件.*打开工程 \/ NBS/,
+  );
+  expect(reads).toEqual(["/controls.nbs"]);
+  expect(s.snapshot()).toEqual(before);
+});
 
 const dialogs = (open: FileDialogs["open"]): FileDialogs => ({
   open,
@@ -39,6 +85,32 @@ function customSong() {
   });
   return toNbs(p).data;
 }
+it("reserves control definition slots when allocating imported phrase instruments", async () => {
+  const host = fromNbs(toNbs(createDemoProject()).data);
+  host.nbs!.customInstruments = [
+    { name: "Show Save Popup", file: "", key: 45, pressKey: 0 },
+  ];
+  const s = new Session(host),
+    bytes = customSong();
+  const files = new ProjectFiles({
+    session: s,
+    dialogs: dialogs(async () => "/phrase.nbs"),
+    storage: {
+      read: async (path) => {
+        if (path.endsWith(".nbs")) return bytes;
+        throw Error("missing");
+      },
+      write: async () => {},
+    },
+  });
+  expect((await files.action("importPhrase")).ok).toBe(true);
+  expect(
+    s.snapshot().project.instruments.find((i) => i.name === "New")?.id,
+  ).toBe(17);
+  expect(s.snapshot().project.nbs!.customInstruments[0].name).toBe(
+    "Show Save Popup",
+  );
+});
 it("imports NBS into the phrase library without replacing the song and remaps custom resources", async () => {
   const host = createDemoProject();
   host.samples.push({

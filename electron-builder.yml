@@ -1,7 +1,7 @@
 appId: studio.noteblock.editor
 productName: Pomelene Noteblock Editor
 directories:
-  output: ../deliverables/PomeleneNoteblockEditor-0.5.0
+  output: ../deliverables/PomeleneNoteblockEditor-0.5.1
 artifactName: PomeleneNoteblockEditor-${version}-windows-${arch}.${ext}
 files:
   - out/**/*

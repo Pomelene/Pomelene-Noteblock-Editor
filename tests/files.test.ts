@@ -12,6 +12,99 @@ const dialogs = (patch: Partial<FileDialogs> = {}): FileDialogs => ({
   sounds: async () => undefined,
   ...patch,
 });
+it("opens v2 bytes at any extension as the saved project without an NBS import prompt", async () => {
+  const { encodeProject } = await import("../src/shared/io");
+  const s = new Session();
+  let imports = 0;
+  const files = new ProjectFiles({
+    session: s,
+    dialogs: dialogs({ open: async () => "/project.bin" }),
+    chooseImport: async () => {
+      imports++;
+      return "original";
+    },
+    storage: {
+      read: async () => encodeProject(createDemoProject()),
+      write: async () => {},
+    },
+  });
+  expect((await files.action("open")).ok).toBe(true);
+  expect(imports).toBe(0);
+  expect(s.snapshot().document).toEqual({ path: "/project.bin", dirty: false });
+});
+
+it("does not export functional NBS definitions as missing audio", async () => {
+  const { fromNbs, toNbs } = await import("../src/shared/io");
+  const p = fromNbs(toNbs(createDemoProject()).data);
+  p.nbs!.customInstruments = [
+    { name: "Tempo Changer", file: "missing.ogg", key: 45, pressKey: 0 },
+  ];
+  let writes = 0;
+  const files = new ProjectFiles({
+    session: new Session(p),
+    dialogs: dialogs(),
+    storage: {
+      read: async () => new Uint8Array(),
+      write: async () => {
+        writes++;
+      },
+    },
+  });
+  const result = await files.action("exportInstruments");
+  expect(result.ok).toBe(true);
+  expect(writes).toBe(0);
+  expect(result.warnings.join(" ")).toMatch(/控制/);
+});
+
+it("opens control-bearing NBS without audio searches and discloses retained events in preview", async () => {
+  const { fromNbs, toNbs } = await import("../src/shared/io");
+  const p = fromNbs(toNbs(createDemoProject()).data);
+  p.nbs!.customInstruments = [
+    { name: "Show Save Popup", file: "missing.ogg", key: 45, pressKey: 0 },
+  ];
+  p.nbsEvents = [
+    {
+      id: "popup",
+      tick: 16,
+      layer: 0,
+      instrument: 16,
+      pitch: 66,
+      velocity: 100,
+      panning: 100,
+      finePitch: 0,
+      kind: "visual",
+    },
+  ];
+  const bytes = toNbs(p).data,
+    reads: string[] = [],
+    previews: string[] = [];
+  let writes = 0;
+  const files = new ProjectFiles({
+    session: new Session(),
+    dialogs: dialogs({ open: async () => "/controls.nbs" }),
+    chooseImport: async (summary) => {
+      previews.push(...summary.warnings);
+      return "original";
+    },
+    storage: {
+      read: async (path) => {
+        reads.push(path);
+        return bytes;
+      },
+      write: async () => {
+        writes++;
+      },
+    },
+  });
+  const result = await files.action("open");
+  expect(result.ok).toBe(true);
+  expect(result.snapshot.project.nbsEvents).toHaveLength(1);
+  expect(result.snapshot.document.path).toBeUndefined();
+  expect(reads).toEqual(["/controls.nbs"]);
+  expect(writes).toBe(0);
+  expect(result.warnings.join(" ")).not.toMatch(/采样尚未找到/);
+  expect(previews.join(" ")).toContain("Show Save Popup 不会保存文件");
+});
 it("keeps an unsaved project and document identity when a write fails", async () => {
   const s = new Session(createDemoProject());
   s.dispatch({ type: "project:update", patch: { title: "Edited" } });

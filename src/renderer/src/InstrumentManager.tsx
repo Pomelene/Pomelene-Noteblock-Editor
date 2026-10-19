@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { Volume2 } from "lucide-react";
 import type { Instrument, Project } from "../../shared/model";
+import { getNbsEventKind } from "../../shared/nbsEvents";
+import { NbsEventSummary } from "./NbsEventSummary";
 import {
   playableMappingTargets,
   suggestInstrumentMapping,
@@ -25,6 +27,8 @@ export function InstrumentMappingControls({
     [project, instrument.id],
   );
   const source = project.samples.find((s) => s.id === instrument.sampleId);
+  if (getNbsEventKind(instrument.name))
+    return <p>NBS 控制定义随歌曲保留，无需音频映射。</p>;
   const playable = !!(source?.builtin || source?.dataUrl);
   const change = async (targetId?: number) => {
     setPending(true);
@@ -137,6 +141,7 @@ export function InstrumentManager({ project, run, report }: Props) {
         为缺失或不支持的音色选择现有乐器。映射随工程保存，可随时修改、重置或撤销；播放和
         NBS 导出使用相同映射。
       </p>
+      <NbsEventSummary project={project} />
       <p className="instrument-manager-note">
         建议根据名称、音区与节奏生成，需点击“应用建议”才会生效，仅作近似替代。保留原音符、原音色定义和调音。
       </p>
