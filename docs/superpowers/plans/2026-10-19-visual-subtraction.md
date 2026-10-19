@@ -9,7 +9,8 @@
 - [x] Remove duplicate visual labels: decorative project/window badges, source ordinal, duplicate selected-source footer copy, zero instrument counts, current-text badge, uppercase diagnostics and idle shortcut prose. Preserve accessible button names, tooltips and musical state. Make visible transport mode and speed labels understandable in Chinese.
 - [x] Simplify chord panel into a compact parameter tool: unboxed summary, modest chord name, concise root/position labels, put detailed instructions behind explicit help disclosure; keep audition, placement, errors and replacement scope discoverable.
 - [x] Review actual screenshots in Playlist, Pattern, chord panel, overlapping windows, context menu and compact native editor. Run existing interaction tests and desktop smoke; do not add implementation-mirroring CSS tests for this reversible visual change.
-- [ ] Build 0.5.3, compare packaged outputs, retain one local application with separate source archive, back up source on main.
+- [x] Build 0.5.3, compare packaged outputs, retain one local application with separate source archive.
+- [ ] Remote backup: main push attempted; automatic permission review timed out before execution. One retry at delivery.
 
 ## Design choices
 
@@ -24,3 +25,4 @@ Text removal must not remove actions. Static tutorial prose moves into help/tool
 - Verification: TypeScript/unused-locals clean; full suite 302/302 in 35 files. Packaged desktop baseline20/20 and chord8/8, no renderer errors.
 - Visual inspection: Playlist, chord panel, overlapping windows, context menu, compact native editor and dense35k-note screenshot checked. Preserved focus, selection, locks/mute cues and actionable menu entries.
 - Package:22 build files and guide match. Main/preload byte hashes unchanged from0.5.2. Old source ZIP checked before runtime cleanup.
+- Final review: independent reviewer did not return a report and the stalled task was interrupted. Separate implementer self-review and visual inspection completed; no remaining important regressions identified. This is not an independent review pass.
