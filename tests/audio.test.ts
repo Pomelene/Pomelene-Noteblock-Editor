@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AudioSignal, Project, StudioAPI } from "../src/shared/model";
+import type { AudioSignal, Note, Project, StudioAPI } from "../src/shared/model";
 import { AudioEngine } from "../src/renderer/src/audio";
 
 class FakeSource {
@@ -126,6 +126,59 @@ function setup() {
   vi.useFakeTimers();
   vi.stubGlobal("fetch", async () => new Response(new ArrayBuffer(4)));
 }
+
+const previewChord = (tick = 12): Omit<Note, "id">[] => [60, 64, 67].map((pitch, i) => ({ tick: tick + i, layer: i, pitch, instrument: 0, velocity: 80 }));
+
+it("schedules an auditioned chord on one clock without moving or owning the transport", async () => {
+  setup();
+  const b = bus(), { audio, context } = engine(new FakeContext(), b.bridge("chord"));
+  await audio.previewNotes(project(), previewChord());
+  expect(context.sources).toHaveLength(3);
+  expect(context.sources.map(s => s.started[0])).toEqual([0.025, 0.15, 0.275]);
+  expect(context.sources.map(s => s.playbackRate.value)).toEqual([60, 64, 67].map(pitch => 2 ** ((pitch - 66) / 12)));
+  expect(audio.getState()).toMatchObject({ status: "stopped", tick: 0 });
+  expect(b.signals).toHaveLength(0);
+  audio.stopPreview();
+});
+
+it("cancels chord preview sources without stopping an active song", async () => {
+  setup();
+  const { audio, context } = engine();
+  await audio.play(project());
+  const song = context.sources[0], scheduledStops = [...song.stopped];
+  await audio.previewNotes(project(), previewChord());
+  const chordSources = context.sources.slice(1);
+  audio.stopPreview();
+  expect(song.stopped).toEqual(scheduledStops);
+  expect(chordSources.every(source => source.stopped.at(-1) === 0)).toBe(true);
+  expect(audio.getState().status).toBe("playing");
+  audio.stop();
+});
+
+it("does not emit a late chord when the panel closes during decoding", async () => {
+  setup();
+  const context = new FakeContext();
+  let resolve!: (buffer: any) => void;
+  context.decodeAudioData = () => new Promise(r => { resolve = r; });
+  const { audio } = engine(context);
+  const pending = audio.previewNotes(project(), previewChord());
+  await vi.waitFor(() => expect(resolve).toBeTypeOf("function"));
+  audio.stopPreview();
+  resolve({ duration: 1 });
+  await pending;
+  expect(context.sources).toHaveLength(0);
+});
+
+it("cancels a previous chord audition before another starts and respects transport stop", async () => {
+  setup();
+  const { audio, context } = engine();
+  await audio.previewNotes(project(), previewChord());
+  const first = [...context.sources];
+  await audio.previewNotes(project(), previewChord(24));
+  expect(first.every(source => source.stopped.at(-1) === 0)).toBe(true);
+  audio.stop();
+  expect(context.sources.every(source => source.stopped.at(-1) === 0)).toBe(true);
+});
 
 describe("audio transport", () => {
   it("previews a frozen note phrase through its instruments rather than looking for a phrase audio buffer", async () => {

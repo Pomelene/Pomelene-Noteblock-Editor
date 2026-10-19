@@ -1,4 +1,5 @@
 import type { NbsControlEvent } from "./nbsEvents";
+import type { ChordPlacement } from "./chords";
 import type { NbsMetadata } from "../legacy/nbs";
 export interface Note {
   id: string;
@@ -133,6 +134,7 @@ export interface Snapshot {
   document: { path?: string; dirty: boolean };
 }
 export type Command =
+  | { type: "notes:chord"; patternId: string; placement: ChordPlacement }
   | { type: "instrument:map"; id: number; targetId?: number }
   | { type: "import:restoreOriginal" }
   | { type: "phrase:fromPattern"; patternId: string; name?: string }

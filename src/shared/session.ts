@@ -1,4 +1,5 @@
 import { getNbsEventKind } from "./nbsEvents";
+import { planChordPlacement } from "./chords";
 import type { Command, Layer, Pattern, Project, Snapshot } from "./model";
 
 const MAX_TICK = 1_048_576;
@@ -767,6 +768,27 @@ export class Session {
             (c) => c.kind !== "pattern" || c.sourceId !== command.id,
           );
           break;
+        case "notes:chord": {
+          const pat = pattern(command.patternId);
+          if (
+            !p.instruments.some(
+              (instrument) => instrument.id === command.placement.instrument,
+            )
+          )
+            fail("和弦音色不存在");
+          const { notes, removeIds } = planChordPlacement(
+            pat,
+            command.placement,
+          );
+          pat.notes = pat.notes.filter((note) => !removeIds.has(note.id));
+          for (const note of notes) {
+            while (pat.layers.length <= note.layer)
+              pat.layers.push(newLayer(pat.layers.length));
+            pat.notes.push({ ...note, id: uid() });
+            pat.length = Math.max(pat.length, note.tick + 1);
+          }
+          break;
+        }
         case "notes:add": {
           const pat = pattern(command.patternId);
           for (const note of command.notes) {

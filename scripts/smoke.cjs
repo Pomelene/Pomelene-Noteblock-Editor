@@ -33,6 +33,9 @@ async function closeInfo() {
     await d.getByRole("button", { name: "关闭", exact: true }).last().click();
 }
 async function drag(locator, from, to) {
+  // Host snapshots arrive before React has painted them. Start the next
+  // gesture after that paint, rather than racing the project-change cleanup.
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const b = await locator.boundingBox();
   await page.mouse.move(b.x + from.x, b.y + from.y);
   await page.mouse.down();
@@ -564,8 +567,13 @@ async function drag(locator, from, to) {
           35000,
         );
         const mainWindow = await app.browserWindow(page);
-        await mainWindow.evaluate((w) => {
-          w.unmaximize();
+        await mainWindow.evaluate(async (w) => {
+          if (w.isMaximized()) {
+            await new Promise((resolve) => {
+              w.once("unmaximize", resolve);
+              w.unmaximize();
+            });
+          }
           w.setContentSize(1000, 650);
           w.show();
         });

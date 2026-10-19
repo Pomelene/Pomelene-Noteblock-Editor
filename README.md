@@ -1,14 +1,16 @@
-# Pomelene Noteblock Editor 0.5.1
+# Pomelene Noteblock Editor 0.5.2
 
 Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录是独立重构工程，旧版 `desktop` 保留。
 
 远端代码仓库：[Pomelene/Pomelene-Noteblock-Editor](https://github.com/Pomelene/Pomelene-Noteblock-Editor)（私有）。`main` 保存当前代码，版本标签保留已交付源码，`legacy/desktop-0.2` 保留旧工程提交历史。开发与本地文件保留规则见 [仓库与产物管理](docs/repository-and-retention.md)。
 
-当前开发版 **0.5.1** 优先补齐 NBS 控制事件与工程 v2，说明见 [工程 v2 与 NBS 控制事件](docs/project-v2.md)。此前正式命名版的 [0.5.0 Windows 便携包和独立源码包](https://github.com/Pomelene/Pomelene-Noteblock-Editor/releases/tag/pomelene-noteblock-editor-v0.5.0) 继续保留，历史标签不移动。
+当前开发版 **0.5.2** 将已确认的和弦实验室接入正式 Pattern 编辑器，支持调内和弦、转位／附加音／开放排列、上下行分解、实际音色试听及整组撤销。网格左键选落点，默认追加并分配空闲图层；替换只影响生成时刻当前音色的未锁定音符。
 
-本轮 [0.5.1 验证记录](docs/validation-0.5.1.md) 包含 247 项自动测试、112 首用户歌曲兼容性测试及实际打包程序回归结果。
+本轮 [0.5.2 验证记录](docs/validation-0.5.2.md)：302 项自动测试、34 项打包桌面检查。
 
-后续小幅界面调整：编排和 Pattern 的“行高”已移至工具栏左侧，当前自动测试为 249 项。独立的 [和弦实验室 Demo 01](demos/chord-lab/README.md) 用于先调试选时间点、点击和弦生成音符的交互，尚未接入正式编辑器。
+按住右键可连续擦除实际碰到的音符，快速移动仍检测沿途命中，整次拖动只记一次撤销；Escape／失焦取消。编排和 Pattern 的行高设置继续位于工具栏左侧。独立的 [和弦实验室 Demo 01](demos/chord-lab/README.md) 保留作原型记录。
+
+工程仍使用带版本前缀和 CRC32 校验的 v2 格式；此前 NBS 控制事件与格式支持见 [工程 v2 与 NBS 控制事件](docs/project-v2.md) 与 [0.5.1 验证记录](docs/validation-0.5.1.md)。
 
 采用源对象、编排引用、编辑视图三层模型。Pattern 是可编辑乐段，片段采样是只读的可复用音符快照，均可反复编排和打开多个内部或原生窗口。历史音频文件与乐器单音在“音频 / 乐器资源”中单独管理。主进程维护工程、历史及原生文件访问，音频通过 AudioContext 时钟调度并跨窗口协调。
 

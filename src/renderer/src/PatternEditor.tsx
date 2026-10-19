@@ -33,7 +33,14 @@ import {
   gridTicks,
   type SnapId,
 } from "./snap";
-import { BrushStroke, captureGesture, segmentIntersectsRect } from "./gestures";
+import {
+  BrushStroke,
+  captureGesture,
+  clipSegment,
+  segmentIntersectsRect,
+} from "./gestures";
+import { noteDrawRect } from "./noteGeometry";
+import { ChordGenerator } from "./ChordGenerator";
 import { resolveShortcut } from "./shortcuts";
 import {
   instrumentChoices,
@@ -56,6 +63,7 @@ export function PatternEditor({
   seek,
   playTick,
   stopped,
+  generation,
 }: {
   project: Project;
   pattern: Pattern;
@@ -66,6 +74,7 @@ export function PatternEditor({
   seek: (n: number) => void;
   playTick?: number;
   stopped: number;
+  generation?: number;
 }) {
   const scroller = useRef<HTMLDivElement>(null),
     canvas = useRef<HTMLCanvasElement>(null),
@@ -84,6 +93,13 @@ export function PatternEditor({
     [showAllInstruments, setShowAllInstruments] = useState(false),
     [velocity, setVelocity] = useState(85),
     [pitch, setPitch] = useState(66);
+  const [chordOpen, setChordOpen] = useState(false);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  useEffect(
+    () => () => audio.stopPreview(),
+    [project.id, pattern.id, generation],
+  );
   const cancelGesture = useRef<(() => void) | null>(null);
   const updateScroll = (x: number, y: number) =>
     setView((v) => ({ ...v, x, y }));
@@ -141,7 +157,7 @@ export function PatternEditor({
     cancelGesture.current?.();
     setIds([]);
     return () => cancelGesture.current?.();
-  }, [project.id, pattern.id, mode]);
+  }, [project.id, pattern.id, mode, generation]);
   useEffect(() => {
     cancelGesture.current?.();
   }, [project]);
@@ -197,15 +213,18 @@ export function PatternEditor({
     };
   };
   const hit = (x: number, y: number) => {
-    const p = point(x, y);
-    return [...pattern.notes]
-      .reverse()
-      .find(
-        (n) =>
-          (mode === "piano" ? n.pitch === p.pitch : n.layer === p.row) &&
-          p.tick >= n.tick &&
-          p.tick < n.tick + Math.max(0.55, unit * 0.9),
+    return [...pattern.notes].reverse().find((n) => {
+      const row = mode === "piano" ? 108 - n.pitch : n.layer;
+      const r = noteDrawRect(n.tick, row, zoom, rh, unit, view.x, view.y);
+      return (
+        x >= L &&
+        y >= H &&
+        x >= r.x &&
+        x <= r.x + r.w &&
+        y >= r.y &&
+        y <= r.y + r.h
       );
+    });
   };
   useEffect(() => {
     const el = canvas.current,
@@ -276,9 +295,15 @@ export function PatternEditor({
       if (erasedIds.has(original.id)) continue;
       const note = ghostNotes.get(original.id) ?? original,
         row = mode === "piano" ? 108 - note.pitch : note.layer,
-        x = L + note.tick * zoom - view.x + 1,
-        y = H + row * rh - view.y + 2,
-        w = Math.max(7, zoom * Math.max(0.55, Math.min(unit, 0.95)) - 2);
+        { x, y, w } = noteDrawRect(
+          note.tick,
+          row,
+          zoom,
+          rh,
+          unit,
+          view.x,
+          view.y,
+        );
       if (x + w < L || x > view.w || y + rh < H || y > view.h) continue;
       const instrumentDef = project.instruments.find(
           (i) => i.id === note.instrument,
@@ -445,38 +470,6 @@ export function PatternEditor({
   function setProps(patch: Partial<Omit<Note, "id" | "tick" | "layer">>) {
     if (ids.length)
       void run({ type: "notes:update", patternId: pattern.id, ids, patch });
-  }
-  function addNotes(at: number, keys: number[], targetLayer = layer) {
-    const occupied = new Set(pattern.notes.map((n) => `${n.tick}:${n.layer}`));
-    const notes: Omit<Note, "id">[] = [];
-    for (const key of keys) {
-      if (key < 21 || key > 108) continue;
-      let next = targetLayer;
-      while (occupied.has(`${at}:${next}`) || pattern.layers[next]?.locked)
-        next++;
-      occupied.add(`${at}:${next}`);
-      notes.push({
-        tick: at,
-        layer: next,
-        pitch: key,
-        instrument,
-        velocity,
-        panning: 100,
-        finePitch: 0,
-      });
-    }
-    if (notes.length)
-      void run({ type: "notes:add", patternId: pattern.id, notes }).then(
-        (result) => {
-          if (result)
-            setIds(
-              result.project.patterns
-                .find((p) => p.id === pattern.id)!
-                .notes.slice(-notes.length)
-                .map((n) => n.id),
-            );
-        },
-      );
   }
   function tools(x: number, y: number) {
     menu(x, y, [
@@ -886,30 +879,16 @@ export function PatternEditor({
         </button>
         <button
           className="text-button"
-          onClick={(e) =>
-            menu(
-              e.clientX,
-              e.clientY,
-              [
-                ["大三和弦", [0, 4, 7]],
-                ["小三和弦", [0, 3, 7]],
-                ["属七和弦", [0, 4, 7, 10]],
-                ["大七和弦", [0, 4, 7, 11]],
-                ["挂四和弦", [0, 5, 7]],
-                ["减三和弦", [0, 3, 6]],
-              ].map(([label, steps]) => ({
-                label: String(label),
-                action: () =>
-                  addNotes(
-                    cursor,
-                    (steps as number[]).map((s) => s + pitch),
-                  ),
-              })),
-            )
-          }
+          aria-label="和弦生成器"
+          aria-expanded={chordOpen}
+          onClick={() => {
+            cancelGesture.current?.();
+            audio.stopPreview();
+            setChordOpen((v) => !v);
+          }}
         >
-          和弦
-          <ChevronDown size={11} />
+          <Piano size={13} />
+          和弦生成器
         </button>
         <span className="spacer" />
         <SnapPicker label="音符吸附" value={snap} onChange={setSnap} />
@@ -1122,7 +1101,7 @@ export function PatternEditor({
           })}
         </div>
       </section>
-      <div className="pattern-body">
+      <div className={`pattern-body${chordOpen ? " chord-mode" : ""}`}>
         <div
           className="note-scroll"
           ref={scroller}
@@ -1274,28 +1253,46 @@ export function PatternEditor({
                       setFeedback("");
                       cancelGesture.current = null;
                     },
+                    e.button,
                   );
                 };
                 if (e.button === 2 || tool === "delete") {
                   const removed = new Set<string>();
-                  let previous = { x: p.tick, y: p.row + 0.5 };
+                  let previous = { x, y };
                   const erase = (v: { clientX: number; clientY: number }) => {
-                    const q = point(
-                        v.clientX - rect.left,
-                        v.clientY - rect.top,
-                      ),
-                      end = { x: q.tick, y: q.row + 0.5 };
-                    for (const n of pattern.notes)
-                      if (
-                        !pattern.layers[n.layer]?.locked &&
-                        segmentIntersectsRect(previous, end, {
-                          x: n.tick,
-                          y: mode === "piano" ? 108 - n.pitch : n.layer,
-                          w: Math.max(0.55, unit * 0.9),
-                          h: 1,
-                        })
-                      )
-                        removed.add(n.id);
+                    const bounds = el.getBoundingClientRect();
+                    const end = {
+                      x: v.clientX - bounds.left,
+                      y: v.clientY - bounds.top,
+                    };
+                    const live = viewRef.current;
+                    const segment = clipSegment(previous, end, {
+                      x: L,
+                      y: H,
+                      w: Math.max(0, live.w - L),
+                      h: Math.max(0, live.h - H),
+                    });
+                    if (segment)
+                      for (const n of pattern.notes) {
+                        const row = mode === "piano" ? 108 - n.pitch : n.layer;
+                        if (
+                          !pattern.layers[n.layer]?.locked &&
+                          segmentIntersectsRect(
+                            segment.a,
+                            segment.b,
+                            noteDrawRect(
+                              n.tick,
+                              row,
+                              zoom,
+                              rh,
+                              unit,
+                              live.x,
+                              live.y,
+                            ),
+                          )
+                        )
+                          removed.add(n.id);
+                      }
                     previous = end;
                     setErased([...removed]);
                     setFeedback(`擦除 ${removed.size} 个音符 · 松开提交`);
@@ -1310,6 +1307,12 @@ export function PatternEditor({
                         ids: [...removed],
                       });
                   });
+                  return;
+                }
+                if (chordOpen && e.button === 0 && !e.ctrlKey) {
+                  if (mode === "piano") setPitch(p.pitch);
+                  else setLayer(p.row);
+                  setFeedback("已选择和弦落点 · 在右侧放置和弦");
                   return;
                 }
                 if (e.ctrlKey || tool === "select") {
@@ -1542,98 +1545,124 @@ export function PatternEditor({
             />
           </div>
         </div>
-        <aside className="note-inspector">
-          <span className="section-label">
-            {ids.length ? `选区 · ${ids.length} 音符` : "落笔属性"}
-          </span>
-          <label>
-            音高
-            <select
-              aria-label="音符音高"
-              value={first?.pitch ?? pitch}
-              onChange={(e) => {
-                setPitch(+e.target.value);
-                setProps({ pitch: +e.target.value });
-              }}
-            >
-              {Array.from({ length: 88 }, (_, i) => i + 21).map((p) => (
-                <option value={p} key={p}>
-                  {pitchName(p)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            力度
-            <input
-              aria-label="音符力度"
-              type="number"
-              min={0}
-              max={100}
-              key={ids.join() + first?.velocity}
-              defaultValue={first?.velocity ?? velocity}
-              onBlur={(e) => {
-                const n = +e.target.value;
-                if (n >= 0 && n <= 100) {
-                  setVelocity(n);
-                  setProps({ velocity: n });
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
-              }}
-            />
-          </label>
-          <label>
-            声像
-            <input
-              aria-label="音符声像"
-              type="number"
-              min={0}
-              max={200}
-              key={ids.join() + first?.panning}
-              defaultValue={first?.panning ?? 100}
-              disabled={!ids.length}
-              onBlur={(e) => setProps({ panning: +e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
-              }}
-            />
-          </label>
-          <label>
-            微调 <small>cent</small>
-            <input
-              aria-label="音符微调"
-              type="number"
-              min={-32768}
-              max={32767}
-              key={ids.join() + first?.finePitch}
-              defaultValue={first?.finePitch ?? 0}
-              disabled={!ids.length}
-              onBlur={(e) => setProps({ finePitch: +e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
-              }}
-            />
-          </label>
-          <button
-            className="apply-instrument"
-            disabled={!ids.length}
-            onClick={() => setProps({ instrument })}
-          >
-            应用当前音色
-          </button>
-          {selected.some(
-            (n) =>
-              n.pitch !== first?.pitch || n.instrument !== first?.instrument,
-          ) && (
-            <span className="mixed-hint">
-              混合选区
-              <br />
-              显示首个音符；修改应用全部
+        {chordOpen ? (
+          <ChordGenerator
+            key={`${project.id}:${pattern.id}:${generation ?? 0}`}
+            project={project}
+            pattern={pattern}
+            tick={cursor}
+            root={pitch}
+            layer={layer}
+            instrument={instrument}
+            velocity={velocity}
+            run={run}
+            onRoot={setPitch}
+            onClose={() => {
+              audio.stopPreview();
+              setChordOpen(false);
+            }}
+            onPlaced={(result, nextTick) => {
+              const notes =
+                result.project.patterns.find((p) => p.id === pattern.id)
+                  ?.notes ?? [];
+              setIds(notes.filter((n) => !noteIds.has(n.id)).map((n) => n.id));
+              if (nextTick !== undefined) setCursor(nextTick);
+            }}
+          />
+        ) : (
+          <aside className="note-inspector">
+            <span className="section-label">
+              {ids.length ? `选区 · ${ids.length} 音符` : "落笔属性"}
             </span>
-          )}
-        </aside>
+            <label>
+              音高
+              <select
+                aria-label="音符音高"
+                value={first?.pitch ?? pitch}
+                onChange={(e) => {
+                  setPitch(+e.target.value);
+                  setProps({ pitch: +e.target.value });
+                }}
+              >
+                {Array.from({ length: 88 }, (_, i) => i + 21).map((p) => (
+                  <option value={p} key={p}>
+                    {pitchName(p)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              力度
+              <input
+                aria-label="音符力度"
+                type="number"
+                min={0}
+                max={100}
+                key={ids.join() + first?.velocity}
+                defaultValue={first?.velocity ?? velocity}
+                onBlur={(e) => {
+                  const n = +e.target.value;
+                  if (n >= 0 && n <= 100) {
+                    setVelocity(n);
+                    setProps({ velocity: n });
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+              />
+            </label>
+            <label>
+              声像
+              <input
+                aria-label="音符声像"
+                type="number"
+                min={0}
+                max={200}
+                key={ids.join() + first?.panning}
+                defaultValue={first?.panning ?? 100}
+                disabled={!ids.length}
+                onBlur={(e) => setProps({ panning: +e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+              />
+            </label>
+            <label>
+              微调 <small>cent</small>
+              <input
+                aria-label="音符微调"
+                type="number"
+                min={-32768}
+                max={32767}
+                key={ids.join() + first?.finePitch}
+                defaultValue={first?.finePitch ?? 0}
+                disabled={!ids.length}
+                onBlur={(e) => setProps({ finePitch: +e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+              />
+            </label>
+            <button
+              className="apply-instrument"
+              disabled={!ids.length}
+              onClick={() => setProps({ instrument })}
+            >
+              应用当前音色
+            </button>
+            {selected.some(
+              (n) =>
+                n.pitch !== first?.pitch || n.instrument !== first?.instrument,
+            ) && (
+              <span className="mixed-hint">
+                混合选区
+                <br />
+                显示首个音符；修改应用全部
+              </span>
+            )}
+          </aside>
+        )}
       </div>
       <div className="velocity-lane">
         <span className="velocity-label">

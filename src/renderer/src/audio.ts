@@ -1,5 +1,6 @@
 import type {
   AudioSignal,
+  Note,
   Project,
   Sample,
   StudioAPI,
@@ -49,6 +50,8 @@ export class AudioEngine {
   private running?: Running;
   private buffers = new Map<string, Promise<AudioBuffer>>();
   private sources = new Set<AudioBufferSourceNode>();
+  private previewSources = new Set<AudioBufferSourceNode>();
+  private previewGeneration = 0;
   private lastPublish = 0;
   constructor(options: EngineOptions = {}) {
     this.createContext = options.createContext ?? (() => new AudioContext());
@@ -182,6 +185,7 @@ export class AudioEngine {
   }
   private cancel() {
     this.generation++;
+    this.stopPreview();
     this.loading = false;
     if (this.timer !== undefined) clearInterval(this.timer);
     this.timer = undefined;
@@ -238,12 +242,14 @@ export class AudioEngine {
     this.sources.add(source);
     source.onended = () => {
       this.sources.delete(source);
+      this.previewSources.delete(source);
       source.disconnect();
       gain.disconnect();
       panner.disconnect();
     };
     source.start(when, offset);
     source.stop(when + duration);
+    return source;
   }
   private step = () => {
     const r = this.running,
@@ -398,6 +404,7 @@ export class AudioEngine {
     this.setState({ ...this.state, status: "paused", tick });
   }
   stop(): void {
+    this.stopPreview();
     if (!this.owns && this.remoteOwner && !this.loading) {
       void this.signal({ type: "control", command: "stop" }).catch(() => {});
       return;
@@ -483,6 +490,73 @@ export class AudioEngine {
           error: error instanceof Error ? error.message : String(error),
         });
       throw error;
+    }
+  }
+  /** Cancel only the grouped chord audition, leaving transport playback intact. */
+  stopPreview(): void {
+    this.previewGeneration++;
+    for (const source of this.previewSources) {
+      try {
+        source.stop();
+      } catch {
+        /* already ended */
+      }
+      this.sources.delete(source);
+    }
+    this.previewSources.clear();
+  }
+  async previewNotes(
+    project: Project,
+    notes: Omit<Note, "id">[],
+  ): Promise<void> {
+    this.stopPreview();
+    if (!notes.length) return;
+    if (
+      notes.length > 128 ||
+      notes.some((note) => !Number.isFinite(note.tick) || note.tick < 0)
+    )
+      throw new Error("和弦试听数据无效");
+    const generation = this.generation,
+      preview = this.previewGeneration;
+    const ctx = this.audioContext();
+    await ctx.resume();
+    if (generation !== this.generation || preview !== this.previewGeneration)
+      return;
+    const firstTick = Math.min(...notes.map((note) => note.tick));
+    const events = notes.map((note, index) => ({
+      ...noteEvent(project, { ...note, id: `chord-preview-${index}` }),
+      tick: note.tick - firstTick,
+    }));
+    const ids = [...new Set(events.map((event) => event.sampleId))];
+    let buffers: Map<string, AudioBuffer>;
+    try {
+      buffers = new Map(
+        await Promise.all(
+          ids.map(async (id) => {
+            const sample = project.samples.find((sample) => sample.id === id)!;
+            return [id, await this.buffer(sample)] as const;
+          }),
+        ),
+      );
+    } catch (error) {
+      if (generation !== this.generation || preview !== this.previewGeneration)
+        return;
+      throw error;
+    }
+    if (generation !== this.generation || preview !== this.previewGeneration)
+      return;
+    const timing = buildTempoMap(project.bpm),
+      start = ctx.currentTime + 0.025;
+    for (const event of events) {
+      const source = this.sound(
+        event,
+        buffers.get(event.sampleId)!,
+        start + timing.tickToSeconds(event.tick),
+        event.tick,
+        60 / project.bpm / 4,
+        timing,
+      );
+      if (source) this.previewSources.add(source);
     }
   }
   async preview(

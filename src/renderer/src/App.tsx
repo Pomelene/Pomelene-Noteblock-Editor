@@ -768,6 +768,7 @@ export function App() {
           key={p.id}
           project={project}
           pattern={p}
+          generation={snapshot.generation}
           run={run}
           menu={showMenu}
           open={openView}
@@ -1036,7 +1037,7 @@ export function App() {
                     label: "关于 Pomelene Noteblock Editor",
                     action: () =>
                       setInfo({
-                        title: "Pomelene Noteblock Editor 0.5.1",
+                        title: "Pomelene Noteblock Editor 0.5.2",
                         body: (
                           <p>
                             Windows 桌面编辑器 · 新工作区
@@ -1067,7 +1068,7 @@ export function App() {
             ))}
             <span className="spacer" />
             <span className="version-label">
-              POMELENE <b>NOTEBLOCK EDITOR</b> <small>0.5.1</small>
+              POMELENE <b>NOTEBLOCK EDITOR</b> <small>0.5.2</small>
             </span>
           </div>
           <header className="transport-bar">
