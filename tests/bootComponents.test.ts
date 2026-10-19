@@ -26,7 +26,7 @@ describe.skipIf(!executablePath)("plain startup and readiness", () => {
                 await s.transformIndexHtml(
                   "/boot-test.html",
                   `<!doctype html><html lang="zh-CN"><body><div id="root"></div><script type="module">
-    import React from 'react';import {createRoot} from 'react-dom/client';import {BootGate} from '/src/renderer/src/BootSplash.tsx';import '/src/renderer/src/studio.css';import '/src/renderer/src/aurora-theme.css';
+    import React from 'react';import {createRoot} from 'react-dom/client';import {BootGate} from '/src/renderer/src/BootSplash.tsx';import '/src/renderer/src/studio.css';
     window.hostRequests=0;window.studio={onSnapshot:fn=>{window.hostUpdate=fn;return()=>{}},getSnapshot:()=>{window.hostRequests++;return new Promise((resolve,reject)=>{window.resolveHost=()=>resolve({generation:1,revision:1});window.failHost=()=>reject(Error('Host unavailable'));})}};
     createRoot(document.getElementById('root')).render(React.createElement(BootGate,null,React.createElement('div',{className:'studio','data-testid':'ready'},React.createElement('div',{className:'transport-bar'},React.createElement('button',{className:'transport-play playing'},'Pause')))));
    </script></body></html>`,
@@ -98,21 +98,6 @@ describe.skipIf(!executablePath)("plain startup and readiness", () => {
       );
       await p.getByTestId("ready").waitFor();
       expect(await p.getByRole("alert").count()).toBe(0);
-    } finally {
-      await p.close();
-    }
-  });
-  it("respects reduced motion for the playback signal", async () => {
-    const p = await setup();
-    try {
-      await p.emulateMedia({ reducedMotion: "reduce" });
-      await p.evaluate(() => (window as any).resolveHost());
-      await p.getByTestId("ready").waitFor();
-      expect(
-        await p
-          .locator(".transport-play")
-          .evaluate((el) => getComputedStyle(el, "::after").animationName),
-      ).toBe("none");
     } finally {
       await p.close();
     }

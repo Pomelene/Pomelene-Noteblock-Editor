@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { BootGate } from "./BootSplash";
 import "./studio.css";
-import "./aurora-theme.css";
+import "./crystal-theme.css";
 class Recovery extends Component<{ children: ReactNode }, { error: string }> {
   state = { error: "" };
   static getDerivedStateFromError(error: Error) {

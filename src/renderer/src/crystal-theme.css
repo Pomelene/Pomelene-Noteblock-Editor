@@ -1,0 +1,436 @@
+/* Clear glass: actual translucent surfaces over one continuous light field. */
+:root {
+  --bg: #101a2c;
+  --panel: #19263a;
+  --panel-raised: #26364d;
+  --line: rgba(206, 229, 255, 0.16);
+  --text: #eaf3ff;
+  --muted: #b4c5dc;
+  --green: #a5d9f4;
+  --accent: #eac58c;
+  --glass-edge: rgba(223, 240, 255, 0.24);
+  --glass-inset: inset 0 1px 0 rgba(239, 249, 255, 0.14);
+}
+.studio {
+  background:
+    radial-gradient(
+      ellipse 80% 88% at 4% -12%,
+      rgba(42, 153, 188, 0.54),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 70% 90% at 104% 56%,
+      rgba(111, 95, 179, 0.46),
+      transparent 76%
+    ),
+    radial-gradient(
+      ellipse 74% 60% at 35% 115%,
+      rgba(36, 108, 153, 0.48),
+      transparent 72%
+    ),
+    #10192b;
+  color: var(--text);
+}
+.menubar,
+.transport-bar,
+.native-bar {
+  background: rgba(209, 232, 255, 0.055);
+  border-color: var(--glass-edge);
+  box-shadow: var(--glass-inset);
+  backdrop-filter: blur(18px) saturate(125%);
+}
+.menubar {
+  box-shadow: none;
+}
+.app-mark {
+  color: #c4eaff;
+}
+.menu-trigger,
+.file-shortcuts button,
+.native-bar {
+  color: #d7e7f9;
+}
+.version-label,
+.project-badge small {
+  color: #afc3da;
+}
+.project-name {
+  color: #f1f7ff;
+}
+.transport-switch {
+  border-color: rgba(229, 244, 255, 0.2);
+  border-radius: 6px;
+}
+.transport-switch button {
+  background: rgba(8, 19, 34, 0.16);
+  color: #afc5de;
+}
+.transport-switch button.on {
+  background: rgba(182, 221, 255, 0.19);
+  color: #f2faff;
+}
+.transport-play,
+.transport-stop {
+  border-radius: 7px;
+  border: 1px solid rgba(226, 245, 255, 0.22);
+  background: rgba(226, 244, 255, 0.085);
+  box-shadow: var(--glass-inset);
+  color: #e3f3ff;
+}
+.transport-play {
+  background: rgba(158, 218, 255, 0.2);
+  border-color: rgba(202, 238, 255, 0.42);
+}
+.transport-play:hover:not(:disabled) {
+  background: rgba(178, 231, 255, 0.3);
+}
+.transport-play.playing {
+  background: rgba(162, 219, 255, 0.25);
+  color: #f4dcae;
+}
+.transport-loop.on {
+  background: rgba(230, 198, 145, 0.12);
+  color: #f2d4a2;
+}
+.transport-number input,
+.transport-meter select,
+.transport-position {
+  color: #eff8ff;
+}
+.transport-number label,
+.transport-meter label,
+.transport-position-label {
+  color: #b8d0e6;
+}
+.transport-number small {
+  color: #aac7df;
+}
+.transport-position-separator {
+  color: #93cbe8;
+}
+.source-browser {
+  background: rgba(198, 226, 255, 0.065);
+  border-color: var(--glass-edge);
+  backdrop-filter: blur(16px) saturate(115%);
+}
+.browser-title {
+  color: #dbefff;
+  border-color: var(--line);
+}
+.browser-search {
+  background: rgba(8, 20, 36, 0.24);
+  border-color: var(--glass-edge);
+  border-radius: 6px;
+  color: #bcd2e7;
+}
+.browser-search input::placeholder {
+  color: #acc5dc;
+}
+.browser-filters button,
+.library-label {
+  color: #b6cce3;
+}
+.browser-filters button.selected {
+  background: rgba(185, 224, 255, 0.15) !important;
+  border-color: transparent !important;
+}
+.source-row {
+  border-radius: 5px;
+}
+.source-row.active {
+  background: rgba(188, 226, 255, 0.12);
+  border-left-color: #bce8ff;
+  box-shadow: var(--glass-inset);
+}
+.source-row:hover:not(.active) {
+  background: rgba(211, 235, 255, 0.07);
+}
+.source-copy b,
+.browser-selected {
+  color: #e2effc;
+}
+.source-copy small {
+  color: #adc6df;
+}
+.browser-selected {
+  border-color: var(--line);
+}
+.workspace,
+.native-content,
+.pattern-editor,
+.playlist,
+.note-scroll,
+.arrangement-scroll {
+  background: transparent;
+}
+.workspace-frame {
+  background: rgba(173, 207, 247, 0.075);
+  border: 1px solid rgba(226, 241, 255, 0.22);
+  border-radius: 8px;
+  box-shadow:
+    var(--glass-inset),
+    0 8px 24px rgba(3, 8, 20, 0.22);
+  backdrop-filter: blur(16px) saturate(115%);
+}
+.workspace-frame.active {
+  border-color: rgba(221, 243, 255, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(242, 251, 255, 0.25),
+    0 10px 28px rgba(3, 8, 20, 0.26);
+}
+.workspace-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    125deg,
+    rgba(247, 253, 255, 0.045),
+    transparent 28%,
+    transparent 76%,
+    rgba(207, 233, 255, 0.025)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(246, 253, 255, 0.28),
+    inset 1px 0 0 rgba(228, 245, 255, 0.08),
+    inset -1px 0 0 rgba(228, 245, 255, 0.1);
+}
+.workspace-frame.maximized {
+  border-radius: 0;
+}
+.studio-window-titlebar,
+.workspace-frame.active .studio-window-titlebar {
+  background: rgba(210, 235, 255, 0.09);
+  border-bottom-color: rgba(213, 235, 255, 0.1);
+  color: #e2f1ff;
+}
+.studio-window-titlebar {
+  border-radius: 7px 7px 0 0;
+}
+.workspace-frame.maximized .studio-window-titlebar {
+  border-radius: 0;
+}
+.studio-window-actions button {
+  color: #b8cde3;
+}
+.canvas-toolbar,
+.editor-tools,
+.panel-title {
+  background: rgba(200, 225, 255, 0.045);
+  border-color: rgba(217, 239, 255, 0.1);
+}
+.canvas-toolbar button,
+.editor-tools button {
+  color: #c8dbee;
+  border-radius: 4px;
+}
+.selected {
+  background: rgba(168, 218, 255, 0.18) !important;
+  border-color: rgba(207, 238, 255, 0.32) !important;
+  color: #f2faff !important;
+  box-shadow: var(--glass-inset);
+}
+input,
+select {
+  background: rgba(7, 16, 31, 0.24);
+  border-color: rgba(205, 229, 255, 0.15);
+  color: #e4effb;
+  border-radius: 5px;
+}
+select option {
+  background: #1a2a42;
+  color: #e4effb;
+}
+button:hover:not(:disabled) {
+  border-color: rgba(222, 243, 255, 0.18);
+  background: rgba(211, 235, 255, 0.09);
+}
+button:active:not(:disabled) {
+  background: rgba(7, 17, 32, 0.3);
+}
+.instrument-focus-panel {
+  background: rgba(202, 229, 255, 0.045);
+  border-color: var(--line);
+}
+.instrument-focus-header > label:first-of-type {
+  color: #e1efff;
+}
+.instrument-focus-header > label:first-of-type select {
+  background: rgba(194, 229, 255, 0.08);
+  border-color: rgba(194, 234, 255, 0.4);
+  color: #f0f9ff;
+}
+.instrument-choices .instrument-chip {
+  color: #b9cde3;
+}
+.instrument-choices .instrument-chip:hover {
+  background: rgba(208, 234, 255, 0.07);
+}
+.instrument-choices .instrument-chip.current {
+  background: rgba(194, 230, 255, 0.12);
+  border-color: #bce9ff;
+  color: #f0faff;
+}
+.instrument-chip-count {
+  color: #b0c9df;
+}
+.note-inspector,
+.chord-generator {
+  background: rgba(204, 225, 255, 0.035);
+  border-color: rgba(222, 239, 255, 0.15);
+  color: #d6e5f7;
+}
+.chord-generator header strong {
+  color: #eaf5ff;
+}
+.chord-target,
+.chord-summary small,
+.chord-fields label {
+  color: #b8cce1;
+}
+.chord-summary strong {
+  color: #e9f6ff;
+}
+.chord-summary span {
+  color: #ccdeef;
+}
+.chord-fields small {
+  color: #a8d9ee;
+}
+.chord-actions .chord-place {
+  background: rgba(155, 219, 255, 0.2);
+  border-color: rgba(205, 241, 255, 0.36);
+  color: #f1faff;
+  border-radius: 6px;
+  box-shadow: var(--glass-inset);
+}
+.chord-actions .chord-place:hover:not(:disabled) {
+  background: rgba(174, 228, 255, 0.29);
+}
+.chord-degrees button[aria-pressed="true"] {
+  background: rgba(174, 220, 255, 0.16);
+  border-color: rgba(210, 241, 255, 0.38);
+  color: #eef9ff;
+}
+.chord-generator details {
+  border-color: var(--line);
+}
+.velocity-lane {
+  background: rgba(13, 24, 43, 0.26);
+  border-color: var(--line);
+}
+.velocity-label {
+  color: #b2c6dc;
+  border-color: var(--line);
+}
+.canvas-footer,
+.statusbar,
+.window-dock {
+  background: rgba(181, 215, 251, 0.04);
+  border-color: var(--line);
+  color: #b1c8df;
+}
+.window-dock button {
+  color: #b9cde3;
+}
+.window-dock button.active {
+  background: rgba(201, 234, 255, 0.1);
+  border-top-color: #b9e7ff;
+  color: #edf8ff;
+}
+.studio-context-menu {
+  background: rgba(30, 46, 71, 0.66);
+  border-color: rgba(228, 245, 255, 0.36);
+  border-radius: 8px;
+  box-shadow:
+    var(--glass-inset),
+    0 8px 24px rgba(3, 8, 20, 0.25);
+  backdrop-filter: blur(20px) saturate(130%);
+  color: #e6f3ff;
+}
+.studio-menu-item.selected:not(:disabled),
+.studio-menu-item:hover:not(:disabled) {
+  background: rgba(205, 236, 255, 0.14);
+}
+.studio-menu-shortcut {
+  color: #b5cbe1;
+}
+.studio-dialog,
+.import-dialog {
+  background: rgba(26, 42, 66, 0.84);
+  border-color: rgba(224, 242, 255, 0.32);
+  border-radius: 9px;
+  box-shadow:
+    var(--glass-inset),
+    0 12px 32px rgba(3, 8, 20, 0.28);
+  backdrop-filter: blur(20px);
+  color: #e5f1ff;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible,
+.instrument-focus-panel button:focus-visible,
+.instrument-focus-panel select:focus-visible {
+  outline-color: #c4e9ff;
+}
+* {
+  scrollbar-color: #8196b16b #13233b38;
+}
+@supports not (backdrop-filter: blur(16px)) {
+  .workspace-frame,
+  .source-browser,
+  .transport-bar,
+  .native-bar {
+    background-color: #1b2b43;
+  }
+  .studio-context-menu,
+  .studio-dialog,
+  .import-dialog {
+    background-color: #20324b;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .workspace-frame,
+  .source-browser,
+  .transport-bar,
+  .native-bar,
+  .menubar {
+    background: #1b2b43;
+    backdrop-filter: none;
+  }
+  .studio-context-menu,
+  .studio-dialog,
+  .import-dialog {
+    background: #20324b;
+    backdrop-filter: none;
+  }
+}
+@media (forced-colors: active) {
+  .studio {
+    background: Canvas;
+    color: CanvasText;
+  }
+  .workspace-frame,
+  .source-browser,
+  .transport-bar,
+  .menubar,
+  .native-bar,
+  .studio-context-menu,
+  .studio-dialog,
+  .import-dialog {
+    background: Canvas;
+    border-color: CanvasText;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+  .selected,
+  .source-row.active,
+  .instrument-choices .instrument-chip.current {
+    background: Highlight !important;
+    color: HighlightText !important;
+    border-color: Highlight !important;
+  }
+}

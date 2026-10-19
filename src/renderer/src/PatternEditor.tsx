@@ -40,6 +40,7 @@ import {
   segmentIntersectsRect,
 } from "./gestures";
 import { noteDrawRect } from "./noteGeometry";
+import { canvasSurface } from "./canvasTheme";
 import { ChordGenerator } from "./ChordGenerator";
 import { resolveShortcut } from "./shortcuts";
 import {
@@ -233,7 +234,7 @@ export function PatternEditor({
     el.width = view.w * ratio;
     el.height = view.h * ratio;
     ctx.scale(ratio, ratio);
-    ctx.fillStyle = "#282828";
+    ctx.fillStyle = canvasSurface.base;
     ctx.fillRect(0, 0, view.w, view.h);
     ctx.font = "10px Segoe UI, Microsoft YaHei";
     ctx.textBaseline = "middle";
@@ -250,14 +251,14 @@ export function PatternEditor({
       ctx.fillStyle =
         mode === "piano"
           ? black
-            ? "#282828"
-            : "#303030"
+            ? canvasSurface.rowDark
+            : canvasSurface.rowLight
           : row % 2
-            ? "#282828"
-            : "#303030";
+            ? canvasSurface.rowDark
+            : canvasSurface.rowLight;
       ctx.fillRect(L, y, view.w, rh - 1);
       if (mode === "piano" && midi % 12 === 0) {
-        ctx.fillStyle = "#484848";
+        ctx.fillStyle = canvasSurface.gridBar;
         ctx.fillRect(L, y + rh - 1, view.w, 1);
       }
     }
@@ -267,10 +268,10 @@ export function PatternEditor({
       const x = L + t * zoom - view.x;
       ctx.fillStyle =
         Math.abs(t / bar - Math.round(t / bar)) < 1e-6
-          ? "#585858"
+          ? canvasSurface.gridBar
           : Math.abs(t / 4 - Math.round(t / 4)) < 1e-6
-            ? "#404040"
-            : "#383838";
+            ? canvasSurface.gridBeat
+            : canvasSurface.gridFine;
       ctx.fillRect(x, H, 1, view.h);
     }
     const endX = L + pattern.length * zoom - view.x;
@@ -342,7 +343,7 @@ export function PatternEditor({
       ctx.strokeRect(box.x, box.y, box.w, box.h);
     }
     ctx.restore();
-    ctx.fillStyle = "#303030";
+    ctx.fillStyle = canvasSurface.ruler;
     ctx.fillRect(0, 0, view.w, H);
     for (let t = Math.floor(from / bar) * bar; t <= to; t += bar) {
       const x = L + t * zoom - view.x;
@@ -361,11 +362,11 @@ export function PatternEditor({
       ctx.fillStyle =
         mode === "piano"
           ? black
-            ? "#383838"
-            : "#c0c0c0"
+            ? canvasSurface.blackKey
+            : canvasSurface.whiteKey
           : row === layer
-            ? "#484848"
-            : "#303030";
+            ? canvasSurface.layerCurrent
+            : canvasSurface.ruler;
       ctx.fillRect(0, y, L - 2, rh - 1);
       ctx.fillStyle =
         mode === "piano" ? (black ? "#b0b0b0" : "#484848") : "#c0c0c0";
@@ -385,7 +386,7 @@ export function PatternEditor({
       }
     }
     ctx.restore();
-    ctx.fillStyle = "#303030";
+    ctx.fillStyle = canvasSurface.ruler;
     ctx.fillRect(0, 0, L, H);
     ctx.fillStyle = "#b0b0b0";
 

@@ -92,7 +92,7 @@ function createWindow(kind?: EditorKind, id?: string): BrowserWindow {
     minWidth: kind ? 640 : 1000,
     minHeight: kind ? 400 : 640,
     show: false,
-    backgroundColor: "#171d1b",
+    backgroundColor: "#202020",
     title: "Pomelene Noteblock Editor",
     icon: join(here, "../renderer/icon.png"),
     autoHideMenuBar: true,

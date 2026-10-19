@@ -33,6 +33,7 @@ import {
   segmentIntersectsRect,
 } from "./gestures";
 import { audio } from "./audio";
+import { canvasSurface } from "./canvasTheme";
 import { isShortcutInput, resolveShortcut } from "./shortcuts";
 import { useEditorWheelZoom, useEditorRowHeight } from "./useEditorViewport";
 import "./editor-viewport.css";
@@ -190,7 +191,7 @@ export function Playlist({
     el.width = Math.round(view.w * ratio);
     el.height = Math.round(view.h * ratio);
     ctx.scale(ratio, ratio);
-    ctx.fillStyle = "#282828";
+    ctx.fillStyle = canvasSurface.base;
     ctx.fillRect(0, 0, view.w, view.h);
     ctx.font = "11px Segoe UI, Microsoft YaHei";
     ctx.textBaseline = "middle";
@@ -200,9 +201,9 @@ export function Playlist({
     ctx.clip();
     for (let r = 0; r < project.tracks.length; r++) {
       const y = TOP + r * ROW - view.y;
-      ctx.fillStyle = r % 2 ? "#262626" : "#2a2a2a";
+      ctx.fillStyle = r % 2 ? canvasSurface.rowDark : canvasSurface.rowLight;
       ctx.fillRect(LEFT, y, view.w, ROW);
-      ctx.fillStyle = "#181818";
+      ctx.fillStyle = canvasSurface.rowEdge;
       ctx.fillRect(LEFT, y + ROW - 1, view.w, 1);
     }
     const from = Math.floor(view.x / zoom),
@@ -212,10 +213,10 @@ export function Playlist({
       const x = LEFT + t * zoom - view.x;
       ctx.fillStyle =
         Math.abs(t / bar - Math.round(t / bar)) < 1e-6
-          ? "#505050"
+          ? canvasSurface.gridBar
           : Math.abs(t / 4 - Math.round(t / 4)) < 1e-6
-            ? "#404040"
-            : "#303030";
+            ? canvasSurface.gridBeat
+            : canvasSurface.gridFine;
       ctx.fillRect(x, TOP, 1, view.h);
     }
     for (const original of [
@@ -316,7 +317,7 @@ export function Playlist({
       ctx.strokeRect(box.x, box.y, box.w, box.h);
     }
     ctx.restore();
-    ctx.fillStyle = "#303030";
+    ctx.fillStyle = canvasSurface.ruler;
     ctx.fillRect(0, 0, view.w, TOP);
     if (project.loop.enabled) {
       const x = LEFT + project.loop.start * zoom - view.x,
@@ -342,7 +343,7 @@ export function Playlist({
     project.tracks.forEach((track, i) => {
       const y = TOP + i * ROW - view.y;
       if (y + ROW < TOP || y > view.h) return;
-      ctx.fillStyle = "#303030";
+      ctx.fillStyle = canvasSurface.ruler;
       ctx.fillRect(0, y, LEFT - 1, ROW - 1);
       ctx.fillStyle = track.color;
       ctx.fillRect(0, y + 6, 3, ROW - 13);
@@ -369,7 +370,7 @@ export function Playlist({
       }
     });
     ctx.restore();
-    ctx.fillStyle = "#303030";
+    ctx.fillStyle = canvasSurface.ruler;
     ctx.fillRect(0, 0, LEFT, TOP);
     ctx.fillStyle = "#b0b0b0";
 
