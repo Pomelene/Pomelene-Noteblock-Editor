@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Pomelene · 和弦实验室</title>
+    <link rel="stylesheet" href="style.css" />
+    <script defer src="chord-engine.js"></script>
+    <script defer src="samples.js"></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <div class="lab">
+      <header class="masthead">
+        <div class="identity">
+          <span class="mark" aria-hidden="true"
+            ><svg viewBox="0 0 28 28">
+              <path
+                d="M4 4h8v8H4zM16 4h8v8h-8zM4 16h8v8H4zM16 16h8v8h-8z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              />
+              <path
+                d="M19 16v6m0-6 4-1"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              /></svg
+          ></span>
+          <div>
+            <span class="eyebrow">POMELENE / EXPLORATIONS</span>
+            <h1>和弦实验室 <span class="demo-badge">DEMO 01</span></h1>
+          </div>
+        </div>
+        <div class="header-actions">
+          <span id="save-state" class="subtle">独立试验 · 不连接工程</span
+          ><button id="export" class="button quiet">
+            导出音符 JSON <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </header>
+      <div class="workspace-heading">
+        <div>
+          <span class="section-kicker">CHORD WORKBENCH</span>
+          <p>先选一个时间点，再点和弦，把想法落成音符。</p>
+        </div>
+        <div class="position">
+          <span>插入位置</span><strong id="position-label">01 : 01 : 000</strong
+          ><small id="tick-label">TICK 0</small>
+        </div>
+      </div>
+      <main class="workspace">
+        <section class="editor" aria-label="和弦音符编辑区域">
+          <div class="editor-toolbar">
+            <label class="inline-field"
+              >行高
+              <select id="row-height">
+                <option value="18">紧凑</option>
+                <option value="22" selected>标准</option>
+                <option value="28">宽松</option>
+              </select></label
+            >
+            <span class="separator"></span>
+            <label class="inline-field"
+              >吸附
+              <select id="snap">
+                <option value="1">1 tick</option>
+                <option value="2">半拍</option>
+                <option value="4" selected>1 拍</option>
+              </select></label
+            >
+            <div class="edit-history">
+              <button
+                id="undo"
+                class="icon-button"
+                aria-label="撤销"
+                title="撤销 Ctrl+Z"
+              >
+                ↶</button
+              ><button
+                id="redo"
+                class="icon-button"
+                aria-label="重做"
+                title="重做 Ctrl+Y"
+              >
+                ↷
+              </button>
+            </div>
+            <span class="toolbar-spacer"></span
+            ><span class="subtle meter-label">4 小节 · 4/4</span
+            ><span id="note-count" class="count">0 NOTES</span>
+          </div>
+          <div class="roll-shell">
+            <div class="roll-scroll" id="roll-scroll">
+              <div class="roll" id="roll">
+                <div class="ruler" id="ruler">
+                  <span class="ruler-corner">音高</span>
+                  <div id="beat-ruler" class="beat-ruler"></div>
+                </div>
+                <div id="pitch-grid" class="pitch-grid">
+                  <div id="keys" class="keys"></div>
+                  <div
+                    class="note-field"
+                    id="note-field"
+                    role="group"
+                    aria-label="点击选择音符放置时间"
+                  >
+                    <div id="lanes"></div>
+                    <div id="notes"></div>
+                    <div id="ghosts" aria-hidden="true"></div>
+                    <div class="insert-cursor" id="insert-cursor">
+                      <span></span>
+                    </div>
+                    <div class="play-cursor" id="play-cursor" hidden></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="roll-footer">
+            <span
+              ><i class="legend-dot"></i> 已放置
+              <i class="legend-ghost"></i> 待放置预览</span
+            ><span>点击选时间 · 右键删音符 · ← → 移动落点</span>
+          </div>
+          <div class="palette-section">
+            <div class="palette-heading">
+              <div>
+                <h2>和弦条带</h2>
+                <span id="scale-caption" class="subtle">C 大调的常用和弦</span>
+              </div>
+              <div class="scale-fields">
+                <label
+                  >调性
+                  <select id="tonic" aria-label="调性根音"></select></label
+                ><select id="scale" aria-label="调式">
+                  <option value="major">大调</option>
+                  <option value="minor">自然小调</option></select
+                ><select id="strip-octave" aria-label="和弦条带音区">
+                  <option value="3">低音区</option>
+                  <option value="4" selected>中音区</option>
+                  <option value="5">高音区</option>
+                </select>
+              </div>
+            </div>
+            <div id="chord-pads" class="chord-pads"></div>
+            <div class="placement-options">
+              <label><input type="checkbox" id="advance" />放置后前进</label
+              ><select id="advance-step" aria-label="放置后前进距离">
+                <option value="4">1 拍</option>
+                <option value="8">2 拍</option>
+                <option value="16">1 小节</option></select
+              ><span class="toolbar-spacer"></span
+              ><label
+                >同一落点
+                <select id="collision">
+                  <option value="replace">替换该和弦</option>
+                  <option value="add">叠加音符</option>
+                </select></label
+              >
+            </div>
+          </div>
+        </section>
+        <aside class="inspector" aria-label="和弦生成设置">
+          <div class="inspector-heading">
+            <span class="section-kicker">VOICING</span>
+            <h2>把和弦调成你的声音</h2>
+          </div>
+          <div class="chord-preview">
+            <span class="subtle">当前自定义和弦</span
+            ><strong id="chord-name">C</strong>
+            <div id="tone-names" class="tone-names"></div>
+          </div>
+          <div class="settings-grid">
+            <label>根音<select id="root" aria-label="和弦根音"></select></label>
+            <label
+              >音区<select id="octave">
+                <option value="2">C2 起</option>
+                <option value="3">C3 起</option>
+                <option value="4" selected>C4 起</option>
+                <option value="5">C5 起</option>
+                <option value="6">C6 起</option>
+              </select></label
+            >
+            <label class="full">和弦类型<select id="quality"></select></label>
+            <label
+              >转位<select id="inversion">
+                <option value="0">原位</option>
+                <option value="1">第一转位</option>
+                <option value="2">第二转位</option>
+                <option value="3">再升一声部</option>
+              </select></label
+            >
+            <label
+              >附加音<select id="extension">
+                <option value="none">无</option>
+                <option value="6">加六度</option>
+                <option value="9">加九度</option>
+                <option value="11">加十一度</option>
+                <option value="13">加十三度</option>
+              </select></label
+            >
+            <label class="full"
+              >低音<select id="bass">
+                <option value="none">不另加低音</option>
+                <option value="root">添加根音低音</option>
+              </select></label
+            >
+            <label class="full check"
+              ><input type="checkbox" id="spread" />开放排列
+              <span class="subtle">拉开声部音区</span></label
+            >
+          </div>
+          <div class="inspector-divider"></div>
+          <div class="settings-grid">
+            <label class="full"
+              >放置方式<select id="placement">
+                <option value="block">齐奏 · 同时放置</option>
+                <option value="up">分解 · 由低到高</option>
+                <option value="down">分解 · 由高到低</option>
+              </select></label
+            >
+            <label
+              >试听音色<select id="instrument">
+                <option value="harp">音符盒 · Harp</option>
+                <option value="pling">音符盒 · Pling</option>
+              </select></label
+            >
+            <label
+              >力度 <span id="velocity-value">80</span
+              ><input type="range" id="velocity" min="20" max="100" value="80"
+            /></label>
+          </div>
+          <div class="generate-actions">
+            <button class="button preview-button" id="preview">试听和弦</button
+            ><button class="button primary" id="place">
+              放置 C <span aria-hidden="true">＋</span>
+            </button>
+          </div>
+          <p class="inspector-note">
+            放置的是单次触发的 NBS 音符。虚线只作预览，点击放置后才写入时间轴。
+          </p>
+        </aside>
+      </main>
+      <footer class="transport">
+        <div class="transport-actions">
+          <button id="play" class="button play-button">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="m5 3 8 5-8 5z" fill="currentColor" /></svg
+            ><span>播放片段</span></button
+          ><button id="stop" class="icon-button" aria-label="停止播放">
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M4 4h8v8H4z" fill="currentColor" />
+            </svg></button
+          ><label class="tempo"
+            >BPM <input type="number" id="bpm" value="120" min="30" max="300"
+          /></label>
+        </div>
+        <div class="feedback" id="feedback" role="status" aria-live="polite">
+          在上方时间轴点一个位置，或直接从 C 和弦开始。
+        </div>
+        <button id="clear" class="button quiet">清空音符</button>
+      </footer>
+      <div class="footnote">
+        <span>和弦生成交互试验 · DEMO 01 · 可撤销 / 本机暂存</span
+        ><a
+          href="https://support.apple.com/zh-cn/guide/garageband-ipad/chsab9d1c4c/ipados"
+          target="_blank"
+          rel="noreferrer"
+          >参考：库乐队和弦条带与自定义和弦 ↗</a
+        >
+      </div>
+    </div>
+  </body>
+</html>

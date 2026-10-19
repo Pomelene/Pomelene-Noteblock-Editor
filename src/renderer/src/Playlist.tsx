@@ -670,6 +670,36 @@ export function Playlist({
             <MousePointer2 size={15} />
           </button>
         </div>
+        <label className="editor-row-height" title="调整轨道行高以浏览更多声部">
+          行高
+          <input
+            aria-label="编排行高"
+            type="number"
+            min={24}
+            max={128}
+            step={4}
+            defaultValue={ROW}
+            onChange={(e) => {
+              const value = e.target.valueAsNumber;
+              if (Number.isFinite(value) && value >= 24 && value <= 128) {
+                cancelGesture.current?.();
+                setRowHeight(value);
+              }
+            }}
+            onBlur={(e) => {
+              const value = Math.max(
+                24,
+                Math.min(128, e.target.valueAsNumber || ROW),
+              );
+              e.target.value = String(value);
+              cancelGesture.current?.();
+              setRowHeight(value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+          />
+        </label>
         {chooseSource && (
           <select
             aria-label="放置来源"
@@ -780,36 +810,6 @@ export function Playlist({
           </>
         )}
         <span className="spacer" />
-        <label className="editor-row-height" title="调整轨道行高以浏览更多声部">
-          行高
-          <input
-            aria-label="编排行高"
-            type="number"
-            min={24}
-            max={128}
-            step={4}
-            defaultValue={ROW}
-            onChange={(e) => {
-              const value = e.target.valueAsNumber;
-              if (Number.isFinite(value) && value >= 24 && value <= 128) {
-                cancelGesture.current?.();
-                setRowHeight(value);
-              }
-            }}
-            onBlur={(e) => {
-              const value = Math.max(
-                24,
-                Math.min(128, e.target.valueAsNumber || ROW),
-              );
-              e.target.value = String(value);
-              cancelGesture.current?.();
-              setRowHeight(value);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-          />
-        </label>
         <button
           aria-label="编排适应内容"
           title="缩放适应内容 (Shift+4)"

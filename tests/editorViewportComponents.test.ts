@@ -35,7 +35,7 @@ describe.skipIf(!executablePath)("editor row density and time zoom", () => {
             const pattern={id:'p',name:'Pattern',color:'#75b9b0',length:512,layers:Array.from({length:48},(_,i)=>({id:'l'+i,name:'Layer '+i,locked:false,muted:false})),notes:[]};
             const project={id:'project',meter:'4/4',bpm:120,patterns:[pattern],phrases:[],clips:[],loop:{enabled:false,start:0,end:64},tracks:Array.from({length:48},(_,i)=>({id:'t'+i,name:'Track '+i,color:'#75b9b0',locked:false,muted:false,solo:false})),samples:[],instruments:[{id:0,name:'Harp'}]};
             const style=document.createElement('style');style.textContent='body{margin:0}#root{width:100vw;height:100vh;display:flex}.playlist,.pattern-editor{width:100%;height:100%}';document.head.appendChild(style);
-            const common={project,pattern,source:{kind:'pattern',id:'p'},run:async c=>{window.commands.push(c)},seek:n=>window.seeks.push(n),open:()=>{},menu:()=>{},text:()=>{},report:()=>{},stopped:0,tick:0};
+            const common={project,pattern,source:{kind:'pattern',id:'p'},chooseSource:()=>{},run:async c=>{window.commands.push(c)},seek:n=>window.seeks.push(n),open:()=>{},menu:()=>{},text:()=>{},report:()=>{},stopped:0,tick:0};
             createRoot(document.getElementById('root')).render(React.createElement(location.search.includes('pattern')?PatternEditor:Playlist,common));
           </script></body></html>`,
               );
@@ -117,6 +117,52 @@ describe.skipIf(!executablePath)("editor row density and time zoom", () => {
     );
   }
   for (const c of configs) {
+    it(`${c.name} shows row height beside the first tool group before scrolling a compact toolbar`, async () => {
+      const page = await setup(c.name, 520);
+      try {
+        const toolbar = page.locator(
+          c.name === "playlist" ? ".canvas-toolbar" : ".editor-tools",
+        );
+        const row = toolbar.locator(".editor-row-height");
+        expect(
+          await row.evaluate((el) => el.previousElementSibling?.className),
+        ).toBe("tool-group");
+        const groupBox = (await toolbar
+          .locator(".tool-group")
+          .first()
+          .boundingBox())!;
+        const rowBox = (await row.boundingBox())!;
+        const toolbarBox = (await toolbar.boundingBox())!;
+        expect(rowBox.x).toBeGreaterThanOrEqual(groupBox.x + groupBox.width);
+        expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(
+          toolbarBox.x + toolbarBox.width,
+        );
+        expect(await toolbar.evaluate((el) => el.scrollLeft)).toBe(0);
+        if (c.name === "playlist") {
+          expect(
+            await row.evaluate((el) =>
+              el.nextElementSibling?.getAttribute("aria-label"),
+            ),
+          ).toBe("放置来源");
+          const sourceBox = (await page.getByLabel("放置来源").boundingBox())!;
+          expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(sourceBox.x);
+        } else {
+          await page
+            .getByRole("button", { name: "钢琴卷帘", exact: true })
+            .click();
+          expect(
+            await page.getByLabel("琴键行高", { exact: true }).isVisible(),
+          ).toBe(true);
+          expect(await toolbar.evaluate((el) => el.scrollLeft)).toBe(0);
+        }
+        await page
+          .getByLabel(c.name === "pattern" ? "琴键行高" : c.row, { exact: true })
+          .fill("32");
+        expect(await toolbar.evaluate((el) => el.scrollLeft)).toBe(0);
+      } finally {
+        await page.close();
+      }
+    });
     it(`${c.name} compacts rows and maps editing to the resized row`, async () => {
       const page = await setup(c.name);
       try {

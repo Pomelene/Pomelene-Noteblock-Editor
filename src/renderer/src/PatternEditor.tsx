@@ -781,6 +781,44 @@ export function PatternEditor({
             <Layers size={15} />
           </button>
         </div>
+        <label className="editor-row-height" title="调整行高以浏览更多声部">
+          行高
+          <input
+            key={mode}
+            aria-label={mode === "layers" ? "图层行高" : "琴键行高"}
+            type="number"
+            min={mode === "layers" ? 20 : 12}
+            max={mode === "layers" ? 96 : 48}
+            step={2}
+            defaultValue={rh}
+            onChange={(e) => {
+              const value = e.target.valueAsNumber;
+              if (
+                Number.isFinite(value) &&
+                value >= (mode === "layers" ? 20 : 12) &&
+                value <= (mode === "layers" ? 96 : 48)
+              ) {
+                cancelGesture.current?.();
+                (mode === "layers" ? setLayerHeight : setPianoHeight)(value);
+              }
+            }}
+            onBlur={(e) => {
+              const value = Math.max(
+                mode === "layers" ? 20 : 12,
+                Math.min(
+                  mode === "layers" ? 96 : 48,
+                  e.target.valueAsNumber || rh,
+                ),
+              );
+              e.target.value = String(value);
+              cancelGesture.current?.();
+              (mode === "layers" ? setLayerHeight : setPianoHeight)(value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+          />
+        </label>
         <span className="divider" />
         <button
           aria-label="音符绘制"
@@ -874,44 +912,6 @@ export function PatternEditor({
           <ChevronDown size={11} />
         </button>
         <span className="spacer" />
-        <label className="editor-row-height" title="调整行高以浏览更多声部">
-          行高
-          <input
-            key={mode}
-            aria-label={mode === "layers" ? "图层行高" : "琴键行高"}
-            type="number"
-            min={mode === "layers" ? 20 : 12}
-            max={mode === "layers" ? 96 : 48}
-            step={2}
-            defaultValue={rh}
-            onChange={(e) => {
-              const value = e.target.valueAsNumber;
-              if (
-                Number.isFinite(value) &&
-                value >= (mode === "layers" ? 20 : 12) &&
-                value <= (mode === "layers" ? 96 : 48)
-              ) {
-                cancelGesture.current?.();
-                (mode === "layers" ? setLayerHeight : setPianoHeight)(value);
-              }
-            }}
-            onBlur={(e) => {
-              const value = Math.max(
-                mode === "layers" ? 20 : 12,
-                Math.min(
-                  mode === "layers" ? 96 : 48,
-                  e.target.valueAsNumber || rh,
-                ),
-              );
-              e.target.value = String(value);
-              cancelGesture.current?.();
-              (mode === "layers" ? setLayerHeight : setPianoHeight)(value);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-          />
-        </label>
         <SnapPicker label="音符吸附" value={snap} onChange={setSnap} />
         <button aria-label="音符适应内容" title="缩放适应内容" onClick={fit}>
           <Scan size={14} />
