@@ -2,6 +2,8 @@
 
 Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录是独立重构工程，旧版 `desktop` 保留。
 
+Windows 安装版使用离线 NSIS 向导，包含卸载程序，默认当前用户安装。安装目标、运行中进程、目录联接和文件占用均有保护；卸载保留额外用户文件与 AppData。操作过程和验证边界见 [Windows 安装与卸载说明](docs/windows-installer.md)。
+
 远端代码仓库：[Pomelene/Pomelene-Noteblock-Editor](https://github.com/Pomelene/Pomelene-Noteblock-Editor)（私有）。`main` 保存当前代码，版本标签保留已交付源码，`legacy/desktop-0.2` 保留旧工程提交历史。开发与本地文件保留规则见 [仓库与产物管理](docs/repository-and-retention.md)。
 
 当前开发版 **0.5.7** 将开始页升级为全背景实时声纹：线性插值推动尺度与模式变化，正弦缓动和振荡驱动三组配色、旋转及扭曲。原创 WebGL 干涉场叠加细粒子，兼容 Canvas / CSS 回退。保留打开歌曲、打开工程与新建入口，支持暂停和减少动态效果，进入编辑器后释放。
@@ -78,7 +80,7 @@ pnpm smoke:packaged
 node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
 node node_modules/vitest/vitest.mjs run
 node node_modules/electron-vite/bin/electron-vite.js build
-node node_modules/electron-builder/cli.js --win zip --x64
+node node_modules/electron-builder/cli.js --win nsis --x64
 node scripts/smoke.cjs
 node scripts/smart-import-smoke.cjs
 node scripts/phrase-interaction-smoke.cjs
@@ -87,6 +89,8 @@ node scripts/analyze-nbs.cjs 'D:/path/to/Songs'
 ```
 
 真实 Electron 测试只替换系统对话框的路径选择；文件 IPC、序列化、磁盘读写、采样解码、鼠标和键盘操作仍使用实际实现。`NBE_EXE` 可指定解压后的发布 EXE。
+
+安装版验收使用 `scripts/installer-lifecycle.ps1 -Installer <Setup.exe>`，会创建当前用户的临时测试安装和快捷方式，完成后卸载；若已经存在真实安装或同名快捷方式则拒绝执行。不要在未检查脚本和测试目录时直接用于已有安装。开发构建仍可用 `pnpm pack:dir` 生成免安装目录。
 
 ## 工程结构
 

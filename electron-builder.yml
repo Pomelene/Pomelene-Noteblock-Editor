@@ -7,11 +7,31 @@ files:
   - out/**/*
   - package.json
 asar: true
+afterPack: scripts/installer-after-pack.cjs
+compression: normal
 electronDist: node_modules/electron/dist
 extraFiles:
   - from: resources/使用说明.txt
     to: 使用说明.txt
 win:
   icon: resources/icon.ico
-  target: zip
+  target: nsis
   executableName: Pomelene Noteblock Editor
+nsis:
+  artifactName: PomeleneNoteblockEditor-${version}-Setup-${arch}.${ext}
+  oneClick: false
+  perMachine: false
+  selectPerMachineByDefault: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  runAfterFinish: false
+  differentialPackage: false
+  useZip: false
+  packElevateHelper: false
+  installerLanguages:
+    - zh_CN
+    - en_US
+  language: '2052'
+  include: resources/installer.nsh
