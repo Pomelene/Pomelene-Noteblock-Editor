@@ -43,6 +43,8 @@ Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录�
 
 后续开发遵循 [桌面运行环境可替换性](docs/desktop-runtime-portability.md)：保持音乐与文件格式核心独立、宿主能力集中适配，为未来评估更轻量方案保留迁移空间。当前继续使用 Electron 推进核心功能。
 
+新增输入调研见 [文件格式与非发声结构参考表](docs/input-formats-and-control-events.md)，包含格式结构、控制／视觉事件编码、已验证来源和当前语义缺口；它是设计参考，不代表这些新增能力已经实现。
+
 需要 Node.js 22+ 与 pnpm 11.25。先在独立检出目录中执行 `pnpm install --frozen-lockfile`。
 
 ```powershell
