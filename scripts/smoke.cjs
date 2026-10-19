@@ -54,7 +54,7 @@ async function drag(locator, from, to) {
     await app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0].show(),
     );
-    await page.waitForSelector(".studio");
+    await require("./enter-workspace.cjs")(page);
     // Keep this baseline's pixel coordinates on the original one-tick grid;
     // the new adaptive/triplet/free modes have dedicated interaction tests.
     await page

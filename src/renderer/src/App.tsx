@@ -35,6 +35,7 @@ import { resolveShortcut } from "./shortcuts";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { TransportPosition } from "./TransportPosition";
 import { BootSplash } from "./BootSplash";
+import { StartScreen } from "./StartScreen";
 import { layoutWindows } from "./windowGeometry";
 import type { FrameView } from "./WindowFrame";
 import {
@@ -51,7 +52,7 @@ interface TextDialog {
   value: string;
   submit: (value: string) => void;
 }
-export function App() {
+export function App({ startScreen = false }: { startScreen?: boolean }) {
   const snapshot = useStudio(),
     workspace = useRef<HTMLDivElement>(null),
     z = useRef(10);
@@ -106,6 +107,7 @@ export function App() {
         : nativeKind === "phrase"
           ? "phrase"
           : "pattern";
+  const [welcome, setWelcome] = useState(() => startScreen && !nativeKind);
   useEffect(
     () =>
       window.studio.onImportPrompt((prompt) => {
@@ -214,15 +216,21 @@ export function App() {
   async function file(action: FileAction) {
     if (busy) return;
     setBusy(true);
+    setError("");
     try {
       const result = await window.studio.file(action);
       accept(result.snapshot);
       if (result.ok) {
-        if (action === "new" || action === "open") audio.stop();
+        if (["new", "open", "openSong", "openProject"].includes(action)) {
+          audio.stop();
+          setWelcome(false);
+        }
         setStatus(
           {
             new: "已新建空白工程",
             open: "已打开工程",
+            openSong: "已打开 NBS 歌曲",
+            openProject: "已打开工程",
             save: "工程已保存",
             saveAs: "工程已另存",
             exportNbs: "NBS 已导出",
@@ -555,6 +563,17 @@ export function App() {
     const handler = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
       if (document.querySelector("dialog[open]")) return;
+      if (welcome) {
+        if (
+          (e.ctrlKey || e.metaKey) &&
+          !busy &&
+          ["o", "n"].includes(e.key.toLowerCase())
+        ) {
+          e.preventDefault();
+          void file(e.key.toLowerCase() === "n" ? "new" : "open");
+        }
+        return;
+      }
       const action = resolveShortcut(e, "global");
       if (action) {
         e.preventDefault();
@@ -695,6 +714,7 @@ export function App() {
     views,
     active,
     playlistView,
+    welcome,
   ]);
   if (!snapshot || !project) return <BootSplash />;
   const selectedObj = getSource(project, source);
@@ -851,460 +871,89 @@ export function App() {
       className={`studio ${nativeKind ? "native-studio" : ""}`}
       data-dirty={String(snapshot.document.dirty)}
       data-revision={snapshot.revision}
+      data-start-screen={String(welcome)}
     >
-      {!nativeKind && (
-        <>
-          <div className="menubar">
-            <span className="app-mark">
-              <Blocks size={17} />
-            </span>
-            {[
-              ["文件", fileItems],
-              [
-                "编辑",
-                [
-                  {
-                    label: "撤销",
-                    shortcut: "Ctrl+Z",
-                    disabled: !snapshot.canUndo,
-                    action: () => void run({ type: "undo" }),
-                  },
-                  {
-                    label: "重做",
-                    shortcut: "Ctrl+Y",
-                    disabled: !snapshot.canRedo,
-                    action: () => void run({ type: "redo" }),
-                  },
-                  { separator: true, label: "" },
-                  {
-                    label: "恢复原始导入布局…",
-                    disabled: !project.importOrganization,
-                    action: () =>
-                      setInfo({
-                        title: "恢复原始导入布局？",
-                        hideClose: true,
-                        body: (
-                          <>
-                            <p>
-                              此操作会用导入时备份的原始布局替换当前全部
-                              Pattern、音符、编排引用和轨道。导入后的音符与编排修改也会被替换。
-                            </p>
-                            <p>
-                              乐器、采样与工程其它设置保留。此操作可以撤销。
-                            </p>
-                            <div className="dialog-actions">
-                              <button onClick={() => setInfo(null)}>
-                                取消
-                              </button>
-                              <button
-                                className="danger"
-                                onClick={() => {
-                                  void run({
-                                    type: "import:restoreOriginal",
-                                  }).then((result) => {
-                                    if (result)
-                                      setStatus("已恢复原始导入布局，可撤销");
-                                  });
-                                  setInfo(null);
-                                }}
-                              >
-                                恢复原始布局
-                              </button>
-                            </div>
-                          </>
-                        ),
-                      }),
-                  },
-                ],
-              ],
-              [
-                "添加",
-                [
-                  { label: "新建 Pattern", action: () => void createPattern() },
-                  {
-                    label: "导入 NBS 片段采样…",
-                    action: () => void file("importPhrase"),
-                  },
-                  {
-                    label: "导入音频资源…",
-                    action: () => void file("importSample"),
-                  },
-                  {
-                    label: "导入 NBS 乐器 / ZIP…",
-                    action: () => void file("importInstruments"),
-                  },
-                  {
-                    label: "自定义音色与映射…",
-                    action: () => setInstrumentManagerOpen(true),
-                  },
-                  {
-                    label: "新增编排轨道",
-                    action: () => void run({ type: "track:add" }),
-                  },
-                ],
-              ],
-              [
-                "窗口",
-                [
-                  {
-                    label: "新建当前对象编辑实例",
-                    disabled: !selectedObj,
-                    action: () => openView(source),
-                  },
-                  {
-                    label: "排列窗口",
-                    action: () => arrangeWindows("cascade"),
-                  },
-                  {
-                    label: "平铺所有窗口",
-                    shortcut: "Ctrl+Shift+H",
-                    action: () => arrangeWindows("tile"),
-                  },
-                  {
-                    label: "显示整曲编排",
-                    shortcut: "F5",
-                    action: showPlaylist,
-                  },
-                  {
-                    label: "打开所选对象",
-                    shortcut: "F7",
-                    disabled: !selectedObj,
-                    action: () => openView(source),
-                  },
-                  {
-                    label: browserVisible ? "隐藏对象浏览器" : "显示对象浏览器",
-                    action: () => setBrowserVisible((v) => !v),
-                  },
-                  {
-                    label: "恢复所有窗口",
-                    action: () => {
-                      setPlaylistView((v) => ({
-                        ...v,
-                        state: "normal",
-                        z: ++z.current,
-                      }));
-                      setViews((v) =>
-                        v.map((w) => ({ ...w, state: "normal" as const })),
-                      );
-                    },
-                  },
-                  { label: "关闭全部编辑窗口", action: () => setViews([]) },
-                ],
-              ],
-              [
-                "帮助",
-                [
-                  {
-                    label: "智能整理报告…",
-                    disabled: !project.importOrganization,
-                    action: () => {
-                      const organization = project.importOrganization;
-                      if (!organization) return;
-                      setInfo({
-                        title: "智能整理报告",
-                        className: "import-report",
-                        body: (
-                          <>
-                            <p className="import-report-note">
-                              此报告保存于工程，记录导入时的整理结果，不随后续编辑重新计算。报告版本：
-                              <code>{organization.version}</code>。
-                            </p>
-                            <ImportSummary summary={organization.summary} />
-                          </>
-                        ),
-                      });
-                    },
-                  },
-                  {
-                    label: "操作与快捷键",
-                    shortcut: "F1",
-                    action: showShortcutHelp,
-                  },
-                  {
-                    label: "关于 Pomelene Noteblock Editor",
-                    action: () =>
-                      setInfo({
-                        title: "Pomelene Noteblock Editor 0.5.5",
-                        body: (
-                          <p>
-                            Windows 桌面编辑器 · 新工作区
-                            <br />
-                            Electron + React + TypeScript
-                            <br />
-                            基于 NBS 音符语义与 FL 工作方式重建。
-                          </p>
-                        ),
-                      }),
-                  },
-                ],
-              ],
-            ].map(([label, items]) => (
-              <button
-                key={label as string}
-                className="menu-trigger"
-                onClick={(e) =>
-                  showMenu(
-                    e.currentTarget.getBoundingClientRect().left,
-                    e.currentTarget.getBoundingClientRect().bottom,
-                    items as MenuItem[],
-                  )
-                }
-              >
-                {label as string}
-              </button>
-            ))}
-            <span className="spacer" />
-            <span className="version-label">
-              Pomelene <small>0.5.5</small>
-            </span>
-          </div>
-          <header className="transport-bar">
-            <div className="project-badge">
-              <div>
-                <button
-                  className="project-name"
-                  aria-label="重命名工程"
-                  onClick={() =>
-                    requestText(
-                      "工程名称",
-                      project.title,
-                      (title) =>
-                        void run({ type: "project:update", patch: { title } }),
-                    )
-                  }
-                >
-                  {project.title}
-                  {snapshot.document.dirty && <i />}
-                </button>
-                <small title={snapshot.document.path}>
-                  {snapshot.document.path?.split(/[\\/]/).at(-1) ??
-                    "未保存的工程"}
-                </small>
-              </div>
-            </div>
-            <div className="transport-switch">
-              <button
-                className={mode === "song" ? "on" : ""}
-                onClick={() => {
-                  audio.stop();
-                  setMode("song");
-                }}
-              >
-                整曲
-              </button>
-              <button
-                className={mode === "source" ? "on" : ""}
-                title={`当前播放目标：${selectedObj?.name ?? "未选择来源"}`}
-                data-playback-source={source.id}
-                disabled={!selectedObj}
-                onClick={() => {
-                  audio.stop();
-                  setMode("source");
-                }}
-              >
-                当前片段
-              </button>
-            </div>
-            <button
-              className={`transport-play ${transport.status === "playing" ? "playing" : ""}`}
-              aria-label={transport.status === "playing" ? "暂停" : "播放"}
-              title="播放 / 暂停 Space"
-              onClick={playPause}
-            >
-              {transport.status === "playing" ? (
-                <Pause size={19} fill="currentColor" />
-              ) : (
-                <Play size={19} fill="currentColor" />
-              )}
-            </button>
-            <button
-              className="transport-stop"
-              aria-label="终止"
-              title="终止并归零"
-              onClick={stop}
-            >
-              <Square size={16} fill="currentColor" />
-            </button>
-            <button
-              className={`transport-loop ${project.loop.enabled ? "on" : ""}`}
-              aria-label="循环播放"
-              title={`循环 ${project.loop.start}–${project.loop.end} tick`}
-              onClick={() =>
-                void run({
-                  type: "project:update",
-                  patch: {
-                    loop: { ...project.loop, enabled: !project.loop.enabled },
-                  },
-                })
-              }
-            >
-              <Repeat2 size={17} />
-            </button>
-            <div className="transport-number">
-              <label>速度</label>
-              <input
-                aria-label="BPM"
-                type="number"
-                step={1}
-                min={0.15}
-                max={9830.25}
-                key={project.bpm}
-                defaultValue={project.bpm}
-                onBlur={(e) => {
-                  if (+e.target.value !== project.bpm)
-                    void run({
-                      type: "project:update",
-                      patch: { bpm: +e.target.value },
-                    });
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.currentTarget.blur();
-                }}
-              />
-              <small>BPM</small>
-            </div>
-            <div className="transport-meter">
-              <label>拍号</label>
-              <select
-                aria-label="拍号"
-                value={project.meter}
-                onChange={(e) =>
-                  void run({
-                    type: "project:update",
-                    patch: { meter: e.target.value },
-                  })
-                }
-              >
-                {[
-                  ...new Set([
-                    project.meter,
-                    "4/4",
-                    "3/4",
-                    "6/8",
-                    "2/4",
-                    "5/4",
-                    "7/8",
-                    "9/8",
-                    "12/8",
-                  ]),
-                ].map((m) => (
-                  <option key={m}>{m}</option>
-                ))}
-              </select>
-            </div>
-            <TransportPosition tick={transport.tick} meter={project.meter} />
-            <span className="spacer" />
-            <div className="file-shortcuts">
-              <button
-                aria-label="打开工程"
-                title="打开 Ctrl+O"
-                disabled={busy}
-                onClick={() => void file("open")}
-              >
-                <FolderOpen size={18} />
-              </button>
-              <button
-                aria-label="保存工程"
-                title="保存 Ctrl+S"
-                disabled={busy}
-                onClick={() => void file("save")}
-              >
-                <Save size={18} />
-              </button>
-              <button
-                aria-label="导出 NBS"
-                title="导出 NBS Ctrl+E"
-                disabled={busy}
-                onClick={() => void file("exportNbs")}
-              >
-                <FileAudio size={18} />
-              </button>
-              <span className="divider" />
-              <button
-                aria-label="撤销"
-                disabled={!snapshot.canUndo}
-                onClick={() => void run({ type: "undo" })}
-              >
-                <Undo2 size={17} />
-              </button>
-              <button
-                aria-label="重做"
-                disabled={!snapshot.canRedo}
-                onClick={() => void run({ type: "redo" })}
-              >
-                <Redo2 size={17} />
-              </button>
-            </div>
-          </header>
-        </>
+      {welcome && (
+        <StartScreen
+          busy={busy}
+          error={error}
+          initialSession={snapshot.generation === 0}
+          choose={(action) => void file(action)}
+          example={() => {
+            setError("");
+            setWelcome(false);
+          }}
+        />
       )}
-      {nativeKind && (
-        <div className="native-bar">
-          <Blocks size={15} />
-          <b>
-            {nativeKind === "playlist"
-              ? "Playlist · 整曲编排"
-              : nativeKind === "pattern"
-                ? "Pattern 编辑实例"
-                : nativeKind === "phrase"
-                  ? "片段采样 · 只读预览"
-                  : "音频资源实例"}
-          </b>
-          <span className="spacer" />
-          <button
-            aria-label={transport.status === "playing" ? "暂停" : "播放"}
-            onClick={playPause}
-          >
-            {transport.status === "playing" ? (
-              <Pause size={14} />
-            ) : (
-              <Play size={14} />
-            )}
-          </button>
-          <button aria-label="终止" onClick={stop}>
-            <Square size={13} />
-          </button>
-          <button aria-label="保存工程" onClick={() => void file("save")}>
-            <Save size={14} />
-          </button>
-          <button
-            aria-label="停靠回主窗口"
-            title="停靠回主窗口"
-            onClick={() =>
-              void window.studio
-                .dockEditor()
-                .catch((e) => setError(cleanError(e)))
-            }
-          >
-            停靠
-          </button>
-          <button
-            aria-label="操作与快捷键"
-            title="快捷键 F1"
-            onClick={showShortcutHelp}
-          >
-            帮助
-          </button>
-        </div>
-      )}
-      {!nativeKind ? (
-        <div className="studio-body">
-          <aside
-            className="source-browser"
-            style={{
-              width: sidebarWidth,
-              display: browserVisible ? undefined : "none",
-            }}
-          >
-            <div className="browser-title">
-              <FolderOpen size={14} />
-              <strong>对象浏览器</strong>
-              <span className="spacer" />
-              <button
-                title="添加对象"
-                aria-label="添加对象"
-                onClick={(e) =>
-                  showMenu(e.clientX, e.clientY, [
+      <div className="editor-shell" hidden={welcome} inert={welcome}>
+        {!nativeKind && (
+          <>
+            <div className="menubar">
+              <span className="app-mark">
+                <Blocks size={17} />
+              </span>
+              {[
+                ["文件", fileItems],
+                [
+                  "编辑",
+                  [
+                    {
+                      label: "撤销",
+                      shortcut: "Ctrl+Z",
+                      disabled: !snapshot.canUndo,
+                      action: () => void run({ type: "undo" }),
+                    },
+                    {
+                      label: "重做",
+                      shortcut: "Ctrl+Y",
+                      disabled: !snapshot.canRedo,
+                      action: () => void run({ type: "redo" }),
+                    },
+                    { separator: true, label: "" },
+                    {
+                      label: "恢复原始导入布局…",
+                      disabled: !project.importOrganization,
+                      action: () =>
+                        setInfo({
+                          title: "恢复原始导入布局？",
+                          hideClose: true,
+                          body: (
+                            <>
+                              <p>
+                                此操作会用导入时备份的原始布局替换当前全部
+                                Pattern、音符、编排引用和轨道。导入后的音符与编排修改也会被替换。
+                              </p>
+                              <p>
+                                乐器、采样与工程其它设置保留。此操作可以撤销。
+                              </p>
+                              <div className="dialog-actions">
+                                <button onClick={() => setInfo(null)}>
+                                  取消
+                                </button>
+                                <button
+                                  className="danger"
+                                  onClick={() => {
+                                    void run({
+                                      type: "import:restoreOriginal",
+                                    }).then((result) => {
+                                      if (result)
+                                        setStatus("已恢复原始导入布局，可撤销");
+                                    });
+                                    setInfo(null);
+                                  }}
+                                >
+                                  恢复原始布局
+                                </button>
+                              </div>
+                            </>
+                          ),
+                        }),
+                    },
+                  ],
+                ],
+                [
+                  "添加",
+                  [
                     {
                       label: "新建 Pattern",
                       action: () => void createPattern(),
@@ -1321,358 +970,757 @@ export function App() {
                       label: "导入 NBS 乐器 / ZIP…",
                       action: () => void file("importInstruments"),
                     },
-                  ])
-                }
-              >
-                <Plus size={15} />
-              </button>
-            </div>
-            <div className="browser-search">
-              <Search size={13} />
-              <input
-                aria-label="搜索对象"
-                placeholder="搜索 Pattern、片段采样或音频"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
-            <div className="browser-filters">
-              {[
-                ["all", "全部"],
-                ["pattern", "Pattern"],
-                ["phrase", "采样"],
-                ["sample", "音频"],
-              ].map(([key, name]) => (
+                    {
+                      label: "自定义音色与映射…",
+                      action: () => setInstrumentManagerOpen(true),
+                    },
+                    {
+                      label: "新增编排轨道",
+                      action: () => void run({ type: "track:add" }),
+                    },
+                  ],
+                ],
+                [
+                  "窗口",
+                  [
+                    {
+                      label: "新建当前对象编辑实例",
+                      disabled: !selectedObj,
+                      action: () => openView(source),
+                    },
+                    {
+                      label: "排列窗口",
+                      action: () => arrangeWindows("cascade"),
+                    },
+                    {
+                      label: "平铺所有窗口",
+                      shortcut: "Ctrl+Shift+H",
+                      action: () => arrangeWindows("tile"),
+                    },
+                    {
+                      label: "显示整曲编排",
+                      shortcut: "F5",
+                      action: showPlaylist,
+                    },
+                    {
+                      label: "打开所选对象",
+                      shortcut: "F7",
+                      disabled: !selectedObj,
+                      action: () => openView(source),
+                    },
+                    {
+                      label: browserVisible
+                        ? "隐藏对象浏览器"
+                        : "显示对象浏览器",
+                      action: () => setBrowserVisible((v) => !v),
+                    },
+                    {
+                      label: "恢复所有窗口",
+                      action: () => {
+                        setPlaylistView((v) => ({
+                          ...v,
+                          state: "normal",
+                          z: ++z.current,
+                        }));
+                        setViews((v) =>
+                          v.map((w) => ({ ...w, state: "normal" as const })),
+                        );
+                      },
+                    },
+                    { label: "关闭全部编辑窗口", action: () => setViews([]) },
+                  ],
+                ],
+                [
+                  "帮助",
+                  [
+                    {
+                      label: "智能整理报告…",
+                      disabled: !project.importOrganization,
+                      action: () => {
+                        const organization = project.importOrganization;
+                        if (!organization) return;
+                        setInfo({
+                          title: "智能整理报告",
+                          className: "import-report",
+                          body: (
+                            <>
+                              <p className="import-report-note">
+                                此报告保存于工程，记录导入时的整理结果，不随后续编辑重新计算。报告版本：
+                                <code>{organization.version}</code>。
+                              </p>
+                              <ImportSummary summary={organization.summary} />
+                            </>
+                          ),
+                        });
+                      },
+                    },
+                    {
+                      label: "操作与快捷键",
+                      shortcut: "F1",
+                      action: showShortcutHelp,
+                    },
+                    {
+                      label: "关于 Pomelene Noteblock Editor",
+                      action: () =>
+                        setInfo({
+                          title: "Pomelene Noteblock Editor 0.5.6",
+                          body: (
+                            <p>
+                              Windows 桌面编辑器 · 新工作区
+                              <br />
+                              Electron + React + TypeScript
+                              <br />
+                              基于 NBS 音符语义与 FL 工作方式重建。
+                            </p>
+                          ),
+                        }),
+                    },
+                  ],
+                ],
+              ].map(([label, items]) => (
                 <button
-                  className={filter === key ? "selected" : ""}
-                  key={key}
-                  onClick={() => setFilter(key as typeof filter)}
+                  key={label as string}
+                  className="menu-trigger"
+                  onClick={(e) =>
+                    showMenu(
+                      e.currentTarget.getBoundingClientRect().left,
+                      e.currentTarget.getBoundingClientRect().bottom,
+                      items as MenuItem[],
+                    )
+                  }
                 >
-                  {name}
+                  {label as string}
                 </button>
               ))}
-            </div>
-            <div className="browser-items">
-              {(filter === "all" || filter === "pattern") && (
-                <>
-                  <div className="library-label">
-                    <Grid2X2 size={12} />
-                    <span>Pattern</span>
-                    <small>{project.patterns.length}</small>
-                    <button
-                      aria-label="新增 Pattern"
-                      title="新增 Pattern"
-                      onClick={() => void createPattern()}
-                    >
-                      <Plus size={12} />
-                    </button>
-                  </div>
-                  {project.patterns
-                    .filter((p) =>
-                      p.name.toLowerCase().includes(query.toLowerCase()),
-                    )
-                    .map((p) =>
-                      listRow(
-                        { kind: "pattern", id: p.id },
-                        p.name,
-                        p.color,
-                        `${p.notes.length} 音符`,
-                      ),
-                    )}
-                  {!project.patterns.length && (
-                    <button
-                      className="browser-empty"
-                      onClick={() => void createPattern()}
-                    >
-                      ＋ 创建第一个 Pattern
-                    </button>
-                  )}
-                </>
-              )}
-              {(filter === "all" || filter === "phrase") && (
-                <>
-                  <div className="library-label">
-                    <LockKeyhole size={12} />
-                    <span>片段采样</span>
-                    <small>{project.phrases?.length || ""}</small>
-                    <button
-                      aria-label="导入片段采样"
-                      title="导入 NBS 只读片段"
-                      onClick={() => void file("importPhrase")}
-                    >
-                      <Plus size={12} />
-                    </button>
-                  </div>
-                  {(project.phrases ?? [])
-                    .filter((p) =>
-                      p.name.toLowerCase().includes(query.toLowerCase()),
-                    )
-                    .map((p) =>
-                      listRow(
-                        { kind: "phrase", id: p.id },
-                        p.name,
-                        p.color,
-                        `只读 · ${p.notes.length} 音符`,
-                      ),
-                    )}
-                  {!project.phrases?.length && (
-                    <div className="phrase-library-empty">
-                      <button onClick={() => void file("importPhrase")}>
-                        导入 NBS 片段
-                      </button>
-                      <button
-                        disabled={source.kind !== "pattern" || !selectedObj}
-                        onClick={() => void freezePattern(source.id)}
-                      >
-                        从当前 Pattern 创建
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-              {(filter === "all" || filter === "sample") && (
-                <details
-                  className="audio-resource-library"
-                  open={filter === "sample" ? true : undefined}
+              <div className="file-shortcuts">
+                <button
+                  aria-label="打开工程"
+                  title="打开 Ctrl+O"
+                  disabled={busy}
+                  onClick={() => void file("open")}
                 >
-                  <summary>
-                    音频 / 乐器资源 <small>{project.samples.length}</small>
-                  </summary>
-                  <div className="library-label">
-                    <span className="spacer" />
-                    <button
-                      aria-label="自定义音色与映射"
-                      title="自定义音色与映射"
-                      onClick={() => setInstrumentManagerOpen(true)}
-                    >
-                      <Music2 size={12} />
-                    </button>
-                    <button
-                      aria-label="导入音频资源"
-                      title="导入音频资源"
-                      onClick={() => void file("importSample")}
-                    >
-                      <Plus size={12} />
-                    </button>
-                  </div>
-                  {project.samples
-                    .filter((s) =>
-                      s.name.toLowerCase().includes(query.toLowerCase()),
-                    )
-                    .map((s) =>
-                      listRow(
-                        { kind: "sample", id: s.id },
-                        s.name,
-                        s.color,
-                        s.builtin
-                          ? "原版 · 内置"
-                          : s.dataUrl
-                            ? "项目音频"
-                            : "音频未关联",
-                      ),
-                    )}
-                </details>
-              )}
-              {(filter === "all" || filter === "sample") && (
-                <NbsEventSummary project={project} />
-              )}
-            </div>
-            <div className="browser-selected">
-              <div>
-                <strong>{selectedObj?.name ?? "选择一个对象"}</strong>
+                  <FolderOpen size={18} />
+                </button>
+                <button
+                  aria-label="保存工程"
+                  title="保存 Ctrl+S"
+                  disabled={busy}
+                  onClick={() => void file("save")}
+                >
+                  <Save size={18} />
+                </button>
+                <button
+                  aria-label="导出 NBS"
+                  title="导出 NBS Ctrl+E"
+                  disabled={busy}
+                  onClick={() => void file("exportNbs")}
+                >
+                  <FileAudio size={18} />
+                </button>
+                <span className="divider" />
+                <button
+                  aria-label="撤销"
+                  disabled={!snapshot.canUndo}
+                  onClick={() => void run({ type: "undo" })}
+                >
+                  <Undo2 size={17} />
+                </button>
+                <button
+                  aria-label="重做"
+                  disabled={!snapshot.canRedo}
+                  onClick={() => void run({ type: "redo" })}
+                >
+                  <Redo2 size={17} />
+                </button>
               </div>
-              <button
-                aria-label="打开所选对象"
-                title={
-                  source.kind === "phrase" ? "打开只读预览" : "新增编辑实例"
-                }
-                disabled={!selectedObj}
-                onClick={() => openView(source)}
-              >
-                <ChevronRight size={18} />
-              </button>
+              <span className="spacer" />
+              <span className="version-label">
+                Pomelene <small>0.5.6</small>
+              </span>
             </div>
-          </aside>
-          <div
-            className="browser-resizer"
-            style={{ display: browserVisible ? undefined : "none" }}
-            onPointerDown={(e) => {
-              const el = e.currentTarget,
-                start = e.clientX,
-                width = sidebarWidth;
-              el.setPointerCapture(e.pointerId);
-              el.onpointermove = (move) =>
-                setSidebarWidth(
-                  Math.max(180, Math.min(380, width + move.clientX - start)),
-                );
-              el.onpointerup = () => {
-                el.onpointermove = null;
-                el.onpointerup = null;
-              };
-            }}
-          />
-          <div className="work-area">
-            <div className="workspace" ref={workspace}>
-              <WindowFrame
-                view={playlistView}
-                className="arrangement-window"
-                title="整曲编排"
-                active={!active}
-                onChange={(patch) =>
-                  setPlaylistView((v) => ({ ...v, ...patch }))
-                }
-                onFocus={() => {
-                  if (active) setActive("");
-                  if (active || playlistView.z < z.current)
-                    setPlaylistView((v) => ({ ...v, z: ++z.current }));
-                }}
-                onClose={() =>
-                  setPlaylistView((v) => ({ ...v, state: "minimized" }))
-                }
-                onPopout={() =>
-                  void window.studio
-                    .openEditor("playlist", "song")
-                    .then(() =>
-                      setPlaylistView((v) => ({ ...v, state: "minimized" })),
-                    )
-                    .catch((e) => setError(cleanError(e)))
-                }
-              >
-                {renderPlaylist()}
-              </WindowFrame>
-              {views
-                .filter(
-                  (v) => !!getSource(project, { kind: v.kind, id: v.sourceId }),
-                )
-                .map((view) => (
-                  <WindowFrame
-                    key={view.id}
-                    view={view}
-                    title={
-                      getSource(project, { kind: view.kind, id: view.sourceId })
-                        ?.name ?? ""
-                    }
-                    active={active === view.id}
-                    onChange={(patch) =>
-                      setViews((v) =>
-                        v.map((w) =>
-                          w.id === view.id
-                            ? { ...w, ...patch, kind: w.kind }
-                            : w,
-                        ),
+            <header className="transport-bar">
+              <div className="project-badge">
+                <div>
+                  <button
+                    className="project-name"
+                    aria-label="重命名工程"
+                    onClick={() =>
+                      requestText(
+                        "工程名称",
+                        project.title,
+                        (title) =>
+                          void run({
+                            type: "project:update",
+                            patch: { title },
+                          }),
                       )
                     }
-                    onFocus={() => {
+                  >
+                    {project.title}
+                    {snapshot.document.dirty && <i />}
+                  </button>
+                  <small title={snapshot.document.path}>
+                    {snapshot.document.path?.split(/[\\/]/).at(-1) ??
+                      "未保存的工程"}
+                  </small>
+                </div>
+              </div>
+              <div className="transport-switch">
+                <button
+                  className={mode === "song" ? "on" : ""}
+                  onClick={() => {
+                    audio.stop();
+                    setMode("song");
+                  }}
+                >
+                  整曲
+                </button>
+                <button
+                  className={mode === "source" ? "on" : ""}
+                  title={`当前播放目标：${selectedObj?.name ?? "未选择来源"}`}
+                  data-playback-source={source.id}
+                  disabled={!selectedObj}
+                  onClick={() => {
+                    audio.stop();
+                    setMode("source");
+                  }}
+                >
+                  当前片段
+                </button>
+              </div>
+              <button
+                className={`transport-play ${transport.status === "playing" ? "playing" : ""}`}
+                aria-label={transport.status === "playing" ? "暂停" : "播放"}
+                title="播放 / 暂停 Space"
+                onClick={playPause}
+              >
+                {transport.status === "playing" ? (
+                  <Pause size={19} fill="currentColor" />
+                ) : (
+                  <Play size={19} fill="currentColor" />
+                )}
+              </button>
+              <button
+                className="transport-stop"
+                aria-label="终止"
+                title="终止并归零"
+                onClick={stop}
+              >
+                <Square size={16} fill="currentColor" />
+              </button>
+              <button
+                className={`transport-loop ${project.loop.enabled ? "on" : ""}`}
+                aria-label="循环播放"
+                title={`循环 ${project.loop.start}–${project.loop.end} tick`}
+                onClick={() =>
+                  void run({
+                    type: "project:update",
+                    patch: {
+                      loop: { ...project.loop, enabled: !project.loop.enabled },
+                    },
+                  })
+                }
+              >
+                <Repeat2 size={17} />
+              </button>
+              <div className="transport-number">
+                <label>速度</label>
+                <input
+                  aria-label="BPM"
+                  type="number"
+                  step={1}
+                  min={0.15}
+                  max={9830.25}
+                  key={project.bpm}
+                  defaultValue={project.bpm}
+                  onBlur={(e) => {
+                    if (+e.target.value !== project.bpm)
+                      void run({
+                        type: "project:update",
+                        patch: { bpm: +e.target.value },
+                      });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                />
+                <small>BPM</small>
+              </div>
+              <div className="transport-meter">
+                <label>拍号</label>
+                <select
+                  aria-label="拍号"
+                  value={project.meter}
+                  onChange={(e) =>
+                    void run({
+                      type: "project:update",
+                      patch: { meter: e.target.value },
+                    })
+                  }
+                >
+                  {[
+                    ...new Set([
+                      project.meter,
+                      "4/4",
+                      "3/4",
+                      "6/8",
+                      "2/4",
+                      "5/4",
+                      "7/8",
+                      "9/8",
+                      "12/8",
+                    ]),
+                  ].map((m) => (
+                    <option key={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <TransportPosition tick={transport.tick} meter={project.meter} />
+              <span className="spacer" />
+            </header>
+          </>
+        )}
+        {nativeKind && (
+          <div className="native-bar">
+            <Blocks size={15} />
+            <b>
+              {nativeKind === "playlist"
+                ? "Playlist · 整曲编排"
+                : nativeKind === "pattern"
+                  ? "Pattern 编辑实例"
+                  : nativeKind === "phrase"
+                    ? "片段采样 · 只读预览"
+                    : "音频资源实例"}
+            </b>
+            <span className="divider" />
+            <button
+              aria-label={transport.status === "playing" ? "暂停" : "播放"}
+              onClick={playPause}
+            >
+              {transport.status === "playing" ? (
+                <Pause size={14} />
+              ) : (
+                <Play size={14} />
+              )}
+            </button>
+            <button aria-label="终止" onClick={stop}>
+              <Square size={13} />
+            </button>
+            <button aria-label="保存工程" onClick={() => void file("save")}>
+              <Save size={14} />
+            </button>
+            <button
+              aria-label="停靠回主窗口"
+              title="停靠回主窗口"
+              onClick={() =>
+                void window.studio
+                  .dockEditor()
+                  .catch((e) => setError(cleanError(e)))
+              }
+            >
+              停靠
+            </button>
+            <button
+              aria-label="操作与快捷键"
+              title="快捷键 F1"
+              onClick={showShortcutHelp}
+            >
+              帮助
+            </button>
+          </div>
+        )}
+        {!nativeKind ? (
+          <div className="studio-body">
+            <aside
+              className="source-browser"
+              style={{
+                width: sidebarWidth,
+                display: browserVisible ? undefined : "none",
+              }}
+            >
+              <div className="browser-title">
+                <FolderOpen size={14} />
+                <strong>对象浏览器</strong>
+                <span className="spacer" />
+                <button
+                  title="添加对象"
+                  aria-label="添加对象"
+                  onClick={(e) =>
+                    showMenu(e.clientX, e.clientY, [
+                      {
+                        label: "新建 Pattern",
+                        action: () => void createPattern(),
+                      },
+                      {
+                        label: "导入 NBS 片段采样…",
+                        action: () => void file("importPhrase"),
+                      },
+                      {
+                        label: "导入音频资源…",
+                        action: () => void file("importSample"),
+                      },
+                      {
+                        label: "导入 NBS 乐器 / ZIP…",
+                        action: () => void file("importInstruments"),
+                      },
+                    ])
+                  }
+                >
+                  <Plus size={15} />
+                </button>
+              </div>
+              <div className="browser-search">
+                <Search size={13} />
+                <input
+                  aria-label="搜索对象"
+                  placeholder="搜索 Pattern、片段采样或音频"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+              <div className="browser-filters">
+                {[
+                  ["all", "全部"],
+                  ["pattern", "Pattern"],
+                  ["phrase", "采样"],
+                  ["sample", "音频"],
+                ].map(([key, name]) => (
+                  <button
+                    className={filter === key ? "selected" : ""}
+                    key={key}
+                    onClick={() => setFilter(key as typeof filter)}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+              <div className="browser-items">
+                {(filter === "all" || filter === "pattern") && (
+                  <>
+                    <div className="library-label">
+                      <Grid2X2 size={12} />
+                      <span>Pattern</span>
+                      <small>{project.patterns.length}</small>
+                      <button
+                        aria-label="新增 Pattern"
+                        title="新增 Pattern"
+                        onClick={() => void createPattern()}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
+                    {project.patterns
+                      .filter((p) =>
+                        p.name.toLowerCase().includes(query.toLowerCase()),
+                      )
+                      .map((p) =>
+                        listRow(
+                          { kind: "pattern", id: p.id },
+                          p.name,
+                          p.color,
+                          `${p.notes.length} 音符`,
+                        ),
+                      )}
+                    {!project.patterns.length && (
+                      <button
+                        className="browser-empty"
+                        onClick={() => void createPattern()}
+                      >
+                        ＋ 创建第一个 Pattern
+                      </button>
+                    )}
+                  </>
+                )}
+                {(filter === "all" || filter === "phrase") && (
+                  <>
+                    <div className="library-label">
+                      <LockKeyhole size={12} />
+                      <span>片段采样</span>
+                      <small>{project.phrases?.length || ""}</small>
+                      <button
+                        aria-label="导入片段采样"
+                        title="导入 NBS 只读片段"
+                        onClick={() => void file("importPhrase")}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
+                    {(project.phrases ?? [])
+                      .filter((p) =>
+                        p.name.toLowerCase().includes(query.toLowerCase()),
+                      )
+                      .map((p) =>
+                        listRow(
+                          { kind: "phrase", id: p.id },
+                          p.name,
+                          p.color,
+                          `只读 · ${p.notes.length} 音符`,
+                        ),
+                      )}
+                    {!project.phrases?.length && (
+                      <div className="phrase-library-empty">
+                        <button onClick={() => void file("importPhrase")}>
+                          导入 NBS 片段
+                        </button>
+                        <button
+                          disabled={source.kind !== "pattern" || !selectedObj}
+                          onClick={() => void freezePattern(source.id)}
+                        >
+                          从当前 Pattern 创建
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+                {(filter === "all" || filter === "sample") && (
+                  <details
+                    className="audio-resource-library"
+                    open={filter === "sample" ? true : undefined}
+                  >
+                    <summary>
+                      音频 / 乐器资源 <small>{project.samples.length}</small>
+                    </summary>
+                    <div className="library-label">
+                      <span className="spacer" />
+                      <button
+                        aria-label="自定义音色与映射"
+                        title="自定义音色与映射"
+                        onClick={() => setInstrumentManagerOpen(true)}
+                      >
+                        <Music2 size={12} />
+                      </button>
+                      <button
+                        aria-label="导入音频资源"
+                        title="导入音频资源"
+                        onClick={() => void file("importSample")}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
+                    {project.samples
+                      .filter((s) =>
+                        s.name.toLowerCase().includes(query.toLowerCase()),
+                      )
+                      .map((s) =>
+                        listRow(
+                          { kind: "sample", id: s.id },
+                          s.name,
+                          s.color,
+                          s.builtin
+                            ? "原版 · 内置"
+                            : s.dataUrl
+                              ? "项目音频"
+                              : "音频未关联",
+                        ),
+                      )}
+                  </details>
+                )}
+                {(filter === "all" || filter === "sample") && (
+                  <NbsEventSummary project={project} />
+                )}
+              </div>
+              <div className="browser-selected">
+                <div>
+                  <strong>{selectedObj?.name ?? "选择一个对象"}</strong>
+                </div>
+                <button
+                  aria-label="打开所选对象"
+                  title={
+                    source.kind === "phrase" ? "打开只读预览" : "新增编辑实例"
+                  }
+                  disabled={!selectedObj}
+                  onClick={() => openView(source)}
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            </aside>
+            <div
+              className="browser-resizer"
+              style={{ display: browserVisible ? undefined : "none" }}
+              onPointerDown={(e) => {
+                const el = e.currentTarget,
+                  start = e.clientX,
+                  width = sidebarWidth;
+                el.setPointerCapture(e.pointerId);
+                el.onpointermove = (move) =>
+                  setSidebarWidth(
+                    Math.max(180, Math.min(380, width + move.clientX - start)),
+                  );
+                el.onpointerup = () => {
+                  el.onpointermove = null;
+                  el.onpointerup = null;
+                };
+              }}
+            />
+            <div className="work-area">
+              <div className="workspace" ref={workspace}>
+                <WindowFrame
+                  view={playlistView}
+                  className="arrangement-window"
+                  title="整曲编排"
+                  active={!active}
+                  onChange={(patch) =>
+                    setPlaylistView((v) => ({ ...v, ...patch }))
+                  }
+                  onFocus={() => {
+                    if (active) setActive("");
+                    if (active || playlistView.z < z.current)
+                      setPlaylistView((v) => ({ ...v, z: ++z.current }));
+                  }}
+                  onClose={() =>
+                    setPlaylistView((v) => ({ ...v, state: "minimized" }))
+                  }
+                  onPopout={() =>
+                    void window.studio
+                      .openEditor("playlist", "song")
+                      .then(() =>
+                        setPlaylistView((v) => ({ ...v, state: "minimized" })),
+                      )
+                      .catch((e) => setError(cleanError(e)))
+                  }
+                >
+                  {renderPlaylist()}
+                </WindowFrame>
+                {views
+                  .filter(
+                    (v) =>
+                      !!getSource(project, { kind: v.kind, id: v.sourceId }),
+                  )
+                  .map((view) => (
+                    <WindowFrame
+                      key={view.id}
+                      view={view}
+                      title={
+                        getSource(project, {
+                          kind: view.kind,
+                          id: view.sourceId,
+                        })?.name ?? ""
+                      }
+                      active={active === view.id}
+                      onChange={(patch) =>
+                        setViews((v) =>
+                          v.map((w) =>
+                            w.id === view.id
+                              ? { ...w, ...patch, kind: w.kind }
+                              : w,
+                          ),
+                        )
+                      }
+                      onFocus={() => {
+                        setActive(view.id);
+                        selectSource({ kind: view.kind, id: view.sourceId });
+                        setViews((v) =>
+                          v.map((w) =>
+                            w.id === view.id ? { ...w, z: ++z.current } : w,
+                          ),
+                        );
+                      }}
+                      onClose={() =>
+                        setViews((v) => v.filter((w) => w.id !== view.id))
+                      }
+                      onPopout={() =>
+                        void window.studio
+                          .openEditor(view.kind, view.sourceId)
+                          .then(() =>
+                            setViews((v) => v.filter((w) => w.id !== view.id)),
+                          )
+                          .catch((e) => setError(cleanError(e)))
+                      }
+                    >
+                      {renderEditor({ kind: view.kind, id: view.sourceId })}
+                    </WindowFrame>
+                  ))}
+              </div>
+              <div className="window-dock">
+                <button
+                  className={!active ? "active" : ""}
+                  onClick={showPlaylist}
+                >
+                  <Grid2X2 size={13} />
+                  Playlist
+                </button>
+                {views.map((view) => (
+                  <button
+                    key={view.id}
+                    className={
+                      active === view.id && view.state !== "minimized"
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() => {
                       setActive(view.id);
                       selectSource({ kind: view.kind, id: view.sourceId });
                       setViews((v) =>
                         v.map((w) =>
-                          w.id === view.id ? { ...w, z: ++z.current } : w,
+                          w.id === view.id
+                            ? {
+                                ...w,
+                                state:
+                                  w.state === "minimized" ? "normal" : w.state,
+                                z: ++z.current,
+                              }
+                            : w,
                         ),
                       );
+                      requestAnimationFrame(() => focusEditor(view.id));
                     }}
-                    onClose={() =>
-                      setViews((v) => v.filter((w) => w.id !== view.id))
-                    }
-                    onPopout={() =>
-                      void window.studio
-                        .openEditor(view.kind, view.sourceId)
-                        .then(() =>
-                          setViews((v) => v.filter((w) => w.id !== view.id)),
-                        )
-                        .catch((e) => setError(cleanError(e)))
-                    }
                   >
-                    {renderEditor({ kind: view.kind, id: view.sourceId })}
-                  </WindowFrame>
+                    {view.kind === "pattern" ? (
+                      <PianoIcon />
+                    ) : view.kind === "phrase" ? (
+                      <LockKeyhole size={12} />
+                    ) : (
+                      <AudioLines size={12} />
+                    )}
+                    <span>
+                      {getSource(project, {
+                        kind: view.kind,
+                        id: view.sourceId,
+                      })?.name ?? "已删除"}
+                    </span>
+                  </button>
                 ))}
-            </div>
-            <div className="window-dock">
-              <button
-                className={!active ? "active" : ""}
-                onClick={showPlaylist}
-              >
-                <Grid2X2 size={13} />
-                Playlist
-              </button>
-              {views.map((view) => (
-                <button
-                  key={view.id}
-                  className={
-                    active === view.id && view.state !== "minimized"
-                      ? "active"
-                      : ""
-                  }
-                  onClick={() => {
-                    setActive(view.id);
-                    selectSource({ kind: view.kind, id: view.sourceId });
-                    setViews((v) =>
-                      v.map((w) =>
-                        w.id === view.id
-                          ? {
-                              ...w,
-                              state:
-                                w.state === "minimized" ? "normal" : w.state,
-                              z: ++z.current,
-                            }
-                          : w,
-                      ),
-                    );
-                    requestAnimationFrame(() => focusEditor(view.id));
-                  }}
-                >
-                  {view.kind === "pattern" ? (
-                    <PianoIcon />
-                  ) : view.kind === "phrase" ? (
-                    <LockKeyhole size={12} />
-                  ) : (
-                    <AudioLines size={12} />
-                  )}
-                  <span>
-                    {getSource(project, { kind: view.kind, id: view.sourceId })
-                      ?.name ?? "已删除"}
-                  </span>
-                </button>
-              ))}
-              <span className="spacer" />
+                <span className="spacer" />
+              </div>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="native-content">
-          {nativeKind === "playlist"
-            ? renderPlaylist()
-            : renderEditor({
-                kind: nativeSourceKind,
-                id: nativeId ?? "",
-              })}
-        </div>
-      )}
-      {error && (
-        <div role="alert" className="error-banner">
-          <span>{error}</span>
-          <button aria-label="关闭错误" onClick={() => setError("")}>
-            <X size={14} />
-          </button>
-        </div>
-      )}
-      <footer className="statusbar" role="status">
-        <span>
-          {busy
-            ? "正在处理文件…"
-            : transport.status === "loading"
-              ? "正在准备声音…"
-              : status}
-        </span>
-        <span className="spacer" />
-        <span>
-          {snapshot.document.dirty
-            ? "未保存"
-            : snapshot.document.path
-              ? "已保存"
-              : ""}
-        </span>
-      </footer>
+        ) : (
+          <div className="native-content">
+            {nativeKind === "playlist"
+              ? renderPlaylist()
+              : renderEditor({
+                  kind: nativeSourceKind,
+                  id: nativeId ?? "",
+                })}
+          </div>
+        )}
+        {error && (
+          <div role="alert" className="error-banner">
+            <span>{error}</span>
+            <button aria-label="关闭错误" onClick={() => setError("")}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
+        <footer className="statusbar" role="status">
+          <span>
+            {busy
+              ? "正在处理文件…"
+              : transport.status === "loading"
+                ? "正在准备声音…"
+                : status}
+          </span>
+          <span className="spacer" />
+          <span>
+            {snapshot.document.dirty
+              ? "未保存"
+              : snapshot.document.path
+                ? "已保存"
+                : ""}
+          </span>
+        </footer>
+      </div>
       <ContextMenu menu={menuState} onClose={() => setMenuState(null)} />
       {importPrompt && (
         <ImportDialog

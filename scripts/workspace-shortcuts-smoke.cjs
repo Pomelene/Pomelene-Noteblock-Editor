@@ -33,7 +33,7 @@ const snapshot = () => page.evaluate(() => window.studio.getSnapshot());
       BrowserWindow.getAllWindows()[0].show();
       dialog.showMessageBox = async () => ({ response: 1 });
     });
-    await page.waitForSelector(".studio");
+    await require("./enter-workspace.cjs")(page);
     const arrangement = page.locator(".arrangement-window");
     await expect(arrangement.getByLabel("放置来源")).toBeVisible();
     await check(

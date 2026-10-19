@@ -23,6 +23,8 @@ const subscribe = <T>(channel: string, listener: (value: T) => void) => {
   };
 };
 const api: StudioAPI = {
+  getWindowActivity: () => ipcRenderer.invoke("studio:windowActivity"),
+  onWindowActivity: (fn) => subscribe<boolean>("studio:windowActivity", fn),
   onImportPrompt: (fn) =>
     subscribe<ImportPrompt | null>("studio:importPrompt", fn),
   respondImport: async (id, mode) => {

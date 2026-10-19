@@ -30,7 +30,7 @@ async function check(name, fn) {
       BrowserWindow.getAllWindows()[0].show();
       dialog.showMessageBox = async () => ({ response: 1 });
     });
-    await page.waitForSelector(".studio");
+    await require("./enter-workspace.cjs")(page);
     const p = (await page.evaluate(() => window.studio.getSnapshot())).project;
     const [a, b, c] = p.patterns;
     await page.evaluate(() => {

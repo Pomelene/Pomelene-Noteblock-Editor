@@ -1,4 +1,15 @@
 /* Clear glass: actual translucent surfaces over one continuous light field. */
+.menubar .file-shortcuts {
+  margin-left: 6px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(206, 229, 255, 0.16);
+}
+.menubar .file-shortcuts button {
+  height: 25px;
+  min-height: 25px;
+  padding: 3px;
+  min-width: 27px;
+}
 :root {
   --bg: #101a2c;
   --panel: #19263a;

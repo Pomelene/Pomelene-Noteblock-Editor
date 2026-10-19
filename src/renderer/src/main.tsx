@@ -28,7 +28,7 @@ class Recovery extends Component<{ children: ReactNode }, { error: string }> {
 createRoot(document.getElementById("root")!).render(
   <Recovery>
     <BootGate>
-      <App />
+      <App startScreen />
     </BootGate>
   </Recovery>,
 );

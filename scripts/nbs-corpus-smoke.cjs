@@ -51,7 +51,7 @@ const errors = [],
         return { canceled: !filePath, filePath };
       };
     });
-    await page.waitForSelector(".studio");
+    await require("./enter-workspace.cjs")(page);
     await page.evaluate(
       (smart) =>
         window.studio.onImportPrompt((p) => {

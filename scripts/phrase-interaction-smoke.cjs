@@ -68,7 +68,7 @@ async function closeEditors() {
       };
       dialog.showMessageBox = async () => ({ response: 1 });
     });
-    await page.waitForSelector(".studio");
+    await require("./enter-workspace.cjs")(page);
     const seed = await project();
     seed.title = "Interaction and phrase acceptance";
     seed.phrases = [];

@@ -1,7 +1,7 @@
 {
   "name": "pomelene-noteblock-editor",
   "productName": "Pomelene Noteblock Editor",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "description": "Pattern-based desktop editor for Note Block Songs",
   "private": true,
   "type": "module",
@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "smoke": "node scripts/smoke.cjs",
+    "smoke:start": "node scripts/start-screen-smoke.cjs",
     "pack:win": "electron-builder --win zip --x64",
     "smoke:packaged": "node scripts/smoke.cjs --packaged",
     "analyze:nbs": "node scripts/analyze-nbs.cjs",

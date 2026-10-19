@@ -106,6 +106,19 @@ function createWindow(kind?: EditorKind, id?: string): BrowserWindow {
     },
   });
   windows.add(win);
+  const activity = () => {
+    if (!win.isDestroyed() && !win.webContents.isDestroyed())
+      win.webContents.send(
+        "studio:windowActivity",
+        win.isVisible() && !win.isMinimized() && win.isFocused(),
+      );
+  };
+  win.on("show", activity);
+  win.on("hide", activity);
+  win.on("minimize", activity);
+  win.on("restore", activity);
+  win.on("focus", activity);
+  win.on("blur", activity);
   if (kind && id) {
     editors.add(win);
     editorSources.set(win, { kind, id });
@@ -249,6 +262,10 @@ app.whenReady().then(() => {
     );
   });
   handle("studio:snapshot", () => session.snapshot());
+  handle("studio:windowActivity", (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)!;
+    return win.isVisible() && !win.isMinimized() && win.isFocused();
+  });
   handle("studio:dispatch", (_event, payload) => {
     if (files.isBusy) throw new Error("文件操作进行中，请稍后重试");
     const p = current(payload);
@@ -268,6 +285,8 @@ app.whenReady().then(() => {
       ![
         "new",
         "open",
+        "openSong",
+        "openProject",
         "save",
         "saveAs",
         "exportNbs",

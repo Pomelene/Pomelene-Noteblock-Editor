@@ -890,7 +890,7 @@ export function PatternEditor({
           <Piano size={13} />
           和弦生成器
         </button>
-        <span className="spacer" />
+        <span className="divider" />
         <SnapPicker label="音符吸附" value={snap} onChange={setSnap} />
         <button aria-label="音符适应内容" title="缩放适应内容" onClick={fit}>
           <Scan size={14} />
@@ -992,7 +992,7 @@ export function PatternEditor({
           >
             <Plus size={14} />
           </button>
-          <span className="spacer" />
+          <span className="divider" />
           <label className="inline-value">
             长度
             <input

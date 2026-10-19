@@ -40,7 +40,7 @@ fs.mkdirSync(folder, { recursive: true });
       };
       dialog.showMessageBox = async () => ({ response: 1 });
     });
-    await page.waitForSelector(".studio");
+    await require("./enter-workspace.cjs")(page);
     await page.evaluate(() =>
       window.studio.onImportPrompt((prompt) => {
         if (prompt) void window.studio.respondImport(prompt.id, "original");

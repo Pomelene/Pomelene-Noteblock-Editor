@@ -37,7 +37,13 @@ import {
 
 export interface FileDialogs {
   open(
-    kind: "project" | "phrase" | "sample" | "instruments",
+    kind:
+      | "project"
+      | "projectOnly"
+      | "song"
+      | "phrase"
+      | "sample"
+      | "instruments",
   ): Promise<string | undefined>;
   save(
     format: "project" | "nbs" | "instruments",
@@ -86,39 +92,47 @@ export function nativeFileDialogs(
         win = getWindow(),
         options: OpenDialogOptions = {
           title:
-            kind === "project"
-              ? "打开工程 / NBS"
-              : kind === "phrase"
-                ? "导入 NBS 片段采样"
-                : kind === "sample"
-                  ? "导入采样"
-                  : "导入 NBS 乐器定义 / 采样 ZIP",
+            kind === "projectOnly"
+              ? "打开工程文件"
+              : kind === "song"
+                ? "打开 NBS 歌曲"
+                : kind === "project"
+                  ? "打开工程 / NBS"
+                  : kind === "phrase"
+                    ? "导入 NBS 片段采样"
+                    : kind === "sample"
+                      ? "导入采样"
+                      : "导入 NBS 乐器定义 / 采样 ZIP",
           properties: ["openFile"],
           filters: [
-            kind === "project"
-              ? {
-                  name: "Pomelene Noteblock Project v2 / NBS Song",
-                  extensions: ["nbproject", "nbs"],
-                }
-              : kind === "phrase"
-                ? { name: "NBS 音符片段采样", extensions: ["nbs"] }
-                : kind === "sample"
+            kind === "projectOnly"
+              ? { name: "Pomelene 工程", extensions: ["nbproject"] }
+              : kind === "song"
+                ? { name: "Note Block Song", extensions: ["nbs"] }
+                : kind === "project"
                   ? {
-                      name: "音频采样",
-                      extensions: [
-                        "wav",
-                        "ogg",
-                        "mp3",
-                        "flac",
-                        "m4a",
-                        "aac",
-                        "webm",
-                      ],
+                      name: "Pomelene Noteblock Project v2 / NBS Song",
+                      extensions: ["nbproject", "nbs"],
                     }
-                  : {
-                      name: "NBS / Instrument pack",
-                      extensions: ["nbs", "zip"],
-                    },
+                  : kind === "phrase"
+                    ? { name: "NBS 音符片段采样", extensions: ["nbs"] }
+                    : kind === "sample"
+                      ? {
+                          name: "音频采样",
+                          extensions: [
+                            "wav",
+                            "ogg",
+                            "mp3",
+                            "flac",
+                            "m4a",
+                            "aac",
+                            "webm",
+                          ],
+                        }
+                      : {
+                          name: "NBS / Instrument pack",
+                          extensions: ["nbs", "zip"],
+                        },
             { name: "所有文件", extensions: ["*"] },
           ],
         };
@@ -333,14 +347,30 @@ export class ProjectFiles {
         this.options.onReplace?.();
         return this.result(true);
       }
-      if (action === "open") {
+      if (
+        action === "open" ||
+        action === "openSong" ||
+        action === "openProject"
+      ) {
         const owner = this.options.getWindow?.();
-        const path = await this.dialogs.open("project");
+        const path = await this.dialogs.open(
+          action === "openSong"
+            ? "song"
+            : action === "openProject"
+              ? "projectOnly"
+              : "project",
+        );
         if (!path) return this.result(false);
         const bytes = await this.storage.read(path),
           warnings: string[] = [];
-        let project = decodeProject(bytes, path);
         const isProject = isProjectV2(bytes);
+        if (action === "openProject" && !isProject)
+          throw new Error(
+            "请选择 .nbproject 工程文件；NBS 歌曲请使用“打开 .nbs 歌曲”",
+          );
+        if (action === "openSong" && isProject)
+          throw new Error("此文件是工程，请使用“打开工程文件”而非打开歌曲");
+        let project = decodeProject(bytes, path);
         if (!isProject && !this.options.chooseImport)
           warnings.push(...(project.nbs?.warnings ?? []));
         if (!isProject && this.options.chooseImport) {

@@ -212,6 +212,8 @@ export type Command =
 export type FileAction =
   | "new"
   | "open"
+  | "openSong"
+  | "openProject"
   | "save"
   | "saveAs"
   | "exportNbs"
@@ -247,6 +249,8 @@ export interface DockedEditor {
   transport?: TransportState;
 }
 export interface StudioAPI {
+  getWindowActivity(): Promise<boolean>;
+  onWindowActivity(fn: (active: boolean) => void): () => void;
   onImportPrompt(fn: (prompt: ImportPrompt | null) => void): () => void;
   respondImport(
     id: string,

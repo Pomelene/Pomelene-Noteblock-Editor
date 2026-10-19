@@ -22,7 +22,7 @@ let app;
   try {
     const page = await app.firstWindow();
     page.on("pageerror", (error) => errors.push(String(error)));
-    await page.waitForSelector(".studio");
+    await page.waitForSelector(".start-screen");
     const snapshot = await page.evaluate(() => window.studio.getSnapshot());
     // Hold the real snapshot IPC in the test process; no production delay or test hook.
     await app.evaluate(({ ipcMain, BrowserWindow }, snapshot) => {
@@ -54,9 +54,9 @@ let app;
       "real desktop shows a solid startup while host snapshot is pending",
     );
     await app.evaluate(() => globalThis.releaseBoot(globalThis.bootSnapshot));
-    await page.waitForSelector(".studio");
+    await page.waitForSelector(".start-screen");
     assert.equal(await page.locator(".boot-splash").count(), 0);
-    checks.push("first authoritative snapshot opens the actual workspace");
+    checks.push("first authoritative snapshot opens the persistent start page");
     await app.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler("studio:snapshot");
       ipcMain.handle("studio:snapshot", () => {
@@ -76,10 +76,10 @@ let app;
       ipcMain.handle("studio:snapshot", () => globalThis.bootSnapshot);
     });
     await page.getByRole("button", { name: "重新尝试", exact: true }).click();
-    await page.waitForSelector(".studio");
+    await page.waitForSelector(".start-screen");
     assert.equal(await page.getByRole("alert").count(), 0);
     checks.push(
-      "failed initialization retries the connection into the real workspace without page navigation",
+      "failed initialization retries the connection into the start page without page navigation",
     );
     assert.deepEqual(errors, []);
     checks.push(

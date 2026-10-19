@@ -37,7 +37,7 @@ fs.mkdirSync(folder, { recursive: true });
       };
       dialog.showMessageBox = async () => ({ response: 1 });
     });
-    await page.waitForSelector(".studio");
+    await require("./enter-workspace.cjs")(page);
     const snapshot = () => page.evaluate(() => window.studio.getSnapshot());
     const initial = (await snapshot()).project;
     const pat = initial.patterns[0];

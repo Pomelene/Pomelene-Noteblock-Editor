@@ -88,7 +88,7 @@ function canonical(p) {
       };
       dialog.showMessageBox = async () => ({ response: 1 });
     });
-    await page.waitForSelector(".studio");
+    await require("./enter-workspace.cjs")(page);
     const seed = (await snap()).project;
     seed.title = "Pattern Beta · 实际导入测试";
     seed.bpm = 120;

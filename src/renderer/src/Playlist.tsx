@@ -750,6 +750,39 @@ export function Playlist({
         <SnapPicker label="编排吸附" value={snap} onChange={setSnap} />
         <span className="divider" />
         <button
+          aria-label="编排适应内容"
+          title="缩放适应内容 (Shift+4)"
+          onClick={() => fit()}
+        >
+          <Scan size={14} />
+        </button>
+        <button
+          aria-label="缩小编排"
+          disabled={zoom <= 4}
+          onClick={() => setZoom((v) => Math.max(4, v - 3))}
+        >
+          <ZoomOut size={14} />
+        </button>
+        <input
+          aria-label="编排缩放"
+          className="zoom-range"
+          type="range"
+          min={4}
+          max={36}
+          step="any"
+          value={zoom}
+          onChange={(e) => setZoom(+e.target.value)}
+        />
+        <button
+          aria-label="放大编排"
+          disabled={zoom >= 36}
+          onClick={() => setZoom((v) => Math.min(36, v + 3))}
+        >
+          <ZoomIn size={14} />
+        </button>
+
+        <span className="divider" />
+        <button
           title="复制 Ctrl+C"
           aria-label="复制引用"
           disabled={!ids.length}
@@ -816,38 +849,6 @@ export function Playlist({
             </label>
           </>
         )}
-        <span className="spacer" />
-        <button
-          aria-label="编排适应内容"
-          title="缩放适应内容 (Shift+4)"
-          onClick={() => fit()}
-        >
-          <Scan size={14} />
-        </button>
-        <button
-          aria-label="缩小编排"
-          disabled={zoom <= 4}
-          onClick={() => setZoom((v) => Math.max(4, v - 3))}
-        >
-          <ZoomOut size={14} />
-        </button>
-        <input
-          aria-label="编排缩放"
-          className="zoom-range"
-          type="range"
-          min={4}
-          max={36}
-          step="any"
-          value={zoom}
-          onChange={(e) => setZoom(+e.target.value)}
-        />
-        <button
-          aria-label="放大编排"
-          disabled={zoom >= 36}
-          onClick={() => setZoom((v) => Math.min(36, v + 3))}
-        >
-          <ZoomIn size={14} />
-        </button>
       </div>
       <div
         className="arrangement-scroll"

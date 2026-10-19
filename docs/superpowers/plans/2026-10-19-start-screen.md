@@ -1,0 +1,15 @@
+# Start page, left-side controls and procedural Chladni art
+
+User requirements: move frequent upper-right controls toward the upper-left; launch the EXE into a start page with separate song / project / new actions; use simple algorithms for rich real-time imagery. User selected Chladni geometry and particle aggregation, citing Balatro's economy of procedural effects as inspiration. Keep a distinct visual result and existing glass UI.
+
+- Move file/save/export/undo controls into the menu's left group, and remove expanding gaps before editor snap/zoom. Keep conventional window close/maximize actions at the window edge.
+- Keep host connection loading separate from the persistent start page. Native editor windows open directly into their editors. Primary start actions use real host file APIs with distinct native filters; cancellation/failure stays on the start page, success enters editing. NBS import choices must remain reachable. Keep the existing demo behind an explicit secondary example entry.
+- Animate an original sine-mode nodal field with a bounded particle relaxation model. No video, external art, new graphics framework, imported game shader or startup audio. This is procedural wave-inspired art, not a physical sand simulation.
+- Limit animation resolution/particle count and update rate; pause on document hiding and file dialogs; release RAF/listeners when editing begins. Reduced motion shows a static pattern. Provide a visible pause control.
+- Test file routing/type rejection/cancellation and analytic field derivatives/bounds. Check the actual EXE's start/new/open/cancel/failure/import/native paths and main/editor control positions. Package source separately, retain one runtime, back up code.
+
+Research: The Book of Shaders chapter 13 (fBM and coordinate warping), Karl Sims' Gray-Scott tutorial, creator repositories for Chladni visualizations, LÖVE shader documentation and a clearly identified community recreation of Balatro's background. These inform high-level algorithm choices, not copied game code.
+
+Execution: implementation and independent review complete. New file/kernel tests first failed and then passed. TypeScript passes; full 39 files / 320 tests pass. Packaged 0.5.6 passes 44 desktop checks, including start actions, error/cancel preservation, real NBS import, native editors, reduced motion, user pause, native minimize/restore and released animation. Packaged output matches 22 build files and the guide. Actual screenshots inspected. Final archive integrity, current runtime retention and remote commit/tag are recorded in the external release verification summary.
+
+Native minimize testing caught insufficient renderer visibility signals with backgroundThrottling disabled for audio accuracy. A host window-activity API now gates the start artwork, without modifying musical state or playback throttling; late initial replies cannot override newer activity events. The follow-up independent review found no actionable race, cleanup or security issue.

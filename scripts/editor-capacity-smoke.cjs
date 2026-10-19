@@ -35,7 +35,7 @@ const version = require("../package.json").version;
         return { canceled: !filePath, filePath };
       };
     });
-    await page.waitForSelector(".studio");
+    await require("./enter-workspace.cjs")(page);
     await page.getByRole("button", { name: "添加", exact: true }).click();
     await page
       .getByText("自定义音色与映射…", { exact: true })
