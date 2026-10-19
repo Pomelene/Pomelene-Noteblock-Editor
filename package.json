@@ -1,7 +1,7 @@
 {
   "name": "pomelene-noteblock-editor",
   "productName": "Pomelene Noteblock Editor",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Pattern-based desktop editor for Note Block Songs",
   "private": true,
   "type": "module",

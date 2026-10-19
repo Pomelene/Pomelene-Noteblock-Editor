@@ -1,17 +1,25 @@
 import { useEffect, useRef } from "react";
 import { createParticles, stepParticles } from "./chladni";
+import { createStartBackdrop } from "./startBackdrop";
 
 export function ChladniArt({ paused }: { paused: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const backgroundRef = useRef<HTMLCanvasElement>(null),
+    containerRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(paused),
     syncRef = useRef<(() => void) | null>(null);
   pausedRef.current = paused;
   useEffect(() => {
     const canvas = ref.current,
-      ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
+      ctx = canvas?.getContext("2d"),
+      container = containerRef.current,
+      background = backgroundRef.current;
+    if (!canvas || !ctx || !container || !background) return;
+    const backdrop = createStartBackdrop(background);
+    container.dataset.renderer = backdrop.mode;
     const particles = createParticles(2300, 20261019);
     const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+    const forcedColors = matchMedia("(forced-colors: active)");
     let frame = 0,
       last = 0,
       time = 0,
@@ -21,31 +29,26 @@ export function ChladniArt({ paused }: { paused: boolean }) {
     let hostActive = true,
       activityRevision = 0;
     const colors = [
-      "rgba(157,227,255,.78)",
-      "rgba(196,182,255,.65)",
-      "rgba(236,248,255,.85)",
+      "rgba(181,235,255,.34)",
+      "rgba(215,200,255,.27)",
+      "rgba(236,248,255,.43)",
     ];
     const draw = () => {
       ctx.clearRect(0, 0, w, h);
-      const scale = Math.min(w * 0.29, h * 0.42),
-        cx = w < 760 ? w * 0.54 : w * 0.72,
-        cy = h * 0.5;
+      backdrop.draw(time);
       const angle = 0.14 + Math.sin(time * 0.09) * 0.08,
         cs = Math.cos(angle),
         sn = Math.sin(angle);
-      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, scale * 1.3);
-      glow.addColorStop(0, "rgba(90,134,205,.09)");
-      glow.addColorStop(1, "rgba(90,134,205,0)");
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, w, h);
       ctx.globalCompositeOperation = "lighter";
       for (let group = 0; group < 3; group++) {
         ctx.beginPath();
         for (let i = group * 4; i < particles.length; i += 12) {
           const x = particles[i],
             y = particles[i + 1],
-            px = cx + (x * cs - y * sn) * scale,
-            py = cy + (x * sn + y * cs) * scale;
+            px =
+              (0.5 + (x * cs - y * sn) * 0.53) * w +
+              Math.sin(y * 2 + time * 0.15) * w * 0.03,
+            py = (0.5 + (x * sn + y * cs) * 0.53) * h;
           const r = group === 2 ? 1.05 : 0.7;
           ctx.moveTo(px + r, py);
           ctx.arc(px, py, r, 0, Math.PI * 2);
@@ -54,13 +57,13 @@ export function ChladniArt({ paused }: { paused: boolean }) {
         ctx.fill();
       }
       ctx.globalCompositeOperation = "source-over";
-      canvas.dataset.frames = String(+(canvas.dataset.frames ?? 0) + 1);
+      container.dataset.frames = String(+(container.dataset.frames ?? 0) + 1);
     };
     const stop = () => {
       cancelAnimationFrame(frame);
       frame = 0;
       last = 0;
-      canvas.dataset.animating = "false";
+      container.dataset.animating = "false";
     };
     const tick = (now: number) => {
       if (disposed) return;
@@ -80,11 +83,12 @@ export function ChladniArt({ paused }: { paused: boolean }) {
       if (
         !pausedRef.current &&
         !reduced.matches &&
+        !forcedColors.matches &&
         !document.hidden &&
         document.hasFocus() &&
         hostActive
       ) {
-        canvas.dataset.animating = "true";
+        container.dataset.animating = "true";
         frame = requestAnimationFrame(tick);
       }
     };
@@ -104,35 +108,44 @@ export function ChladniArt({ paused }: { paused: boolean }) {
       })
       .catch(() => {});
     const resize = () => {
-      const r = canvas.getBoundingClientRect();
+      const r = container.getBoundingClientRect();
       w = r.width;
       h = r.height;
       const dpr = Math.min(devicePixelRatio || 1, 1.5);
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      backdrop.resize(w, h);
       draw();
     };
     const observer = new ResizeObserver(resize);
-    observer.observe(canvas);
+    observer.observe(container);
     resize();
     sync();
     document.addEventListener("visibilitychange", sync);
     window.addEventListener("blur", sync);
     window.addEventListener("focus", sync);
     reduced.addEventListener("change", sync);
+    forcedColors.addEventListener("change", sync);
     return () => {
       disposed = true;
       stop();
       syncRef.current = null;
       offActivity();
+      backdrop.dispose();
       observer.disconnect();
       document.removeEventListener("visibilitychange", sync);
       window.removeEventListener("blur", sync);
       window.removeEventListener("focus", sync);
       reduced.removeEventListener("change", sync);
+      forcedColors.removeEventListener("change", sync);
     };
   }, []);
   useEffect(() => syncRef.current?.(), [paused]);
-  return <canvas ref={ref} className="start-art" aria-hidden="true" />;
+  return (
+    <div ref={containerRef} className="start-art" aria-hidden="true">
+      <canvas ref={backgroundRef} className="start-backdrop" />
+      <canvas ref={ref} className="start-particles" />
+    </div>
+  );
 }

@@ -141,6 +141,15 @@ async function check(name, fn) {
     await page.screenshot({
       path: path.join(output, packaged ? "packaged-start.png" : "start.png"),
     });
+    if (process.argv.includes("--visual")) {
+      await page.waitForTimeout(8500);
+      await page.screenshot({
+        path: path.join(
+          output,
+          packaged ? "packaged-start-phase2.png" : "start-phase2.png",
+        ),
+      });
+    }
     await check(
       "canceling selection stays on the start page and preserves the session",
       async () => {
