@@ -18,7 +18,7 @@
 - [x] Test and implement cancellable startup connection/error reporting, BootGate and plain BootSplash; provide pre-React HTML shell to avoid blank first paint.
 - [x] Add one coherent visual theme layer, scoped to existing chrome and controls. No music-model or file-format changes.
 - [x] Verify boot loading/readiness/failure/retry and reduced motion in actual browser; reuse editor tests and real desktop checks, inspect screenshots at full/compact widths.
-- [ ] Build 0.5.4, compare packaged assets, archive source separately, retain only the current runtime and back up source on main.
+- [x] Build 0.5.4, compare packaged assets, archive source separately, retain only the current runtime and back up source on main.
 
 ## Verification approach
 
@@ -31,3 +31,4 @@ New lifecycle behavior receives targeted regression tests first. Reversible styl
 - Real desktop retry exposed that `location.reload()` was blocked by navigation protection. The final button reconnects through the existing host API, with no navigation-policy change.
 - Inspected real screenshots of startup, arrangement, chord panel, native compact editor, context menu, overlapping windows and 35,000-note compact layout.
 - Independent review could not start because the configured subagent model is unavailable. No independent-review pass is claimed. Self-review and the recorded test/screenshot evidence are the current release basis.
+- Source archived independently with ZIP integrity/source-only checks; implementation backed up on remote main. Previous 0.5.3 runtime removed after checking its retained source archive SHA256, releasing 387,433,275 bytes. Only the 0.5.4 runnable application remains in deliverables. Final commit/tag and checksums are recorded in the external release verification summary.
