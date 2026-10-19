@@ -171,6 +171,7 @@ async function drag(locator, from, to) {
         await expect(
           page.getByRole("menuitem", { name: "打开编辑实例", exact: true }),
         ).toBeVisible();
+        await page.screenshot({ path: path.join(results, "visual-context-menu.png") });
         await page.keyboard.press("Escape");
       },
     );
@@ -179,6 +180,7 @@ async function drag(locator, from, to) {
       await page.getByTestId("source-" + pid).dblclick();
       await page.getByTestId("source-" + pid).dblclick();
       await expect(page.locator(".studio-window")).toHaveCount(2);
+      await page.screenshot({ path: path.join(results, "visual-overlapping-windows.png") });
     });
     let frame = page.locator(".studio-window").last();
     await check(
@@ -276,7 +278,7 @@ async function drag(locator, from, to) {
     await check(
       "pause holds the audio clock position; one Stop returns cursor and viewport to start",
       async () => {
-        await page.getByRole("button", { name: "SONG", exact: true }).click();
+        await page.getByRole("button", { name: "整曲", exact: true }).click();
         await page
           .getByRole("button", { name: "播放此 Pattern", exact: true })
           .last()
@@ -285,7 +287,7 @@ async function drag(locator, from, to) {
           page.getByRole("button", { name: "暂停", exact: true }),
         ).toBeVisible();
         await expect(
-          page.getByRole("button", { name: "PAT", exact: true }),
+          page.getByRole("button", { name: "当前片段", exact: true }),
         ).toHaveClass("on");
         await expect
           .poll(

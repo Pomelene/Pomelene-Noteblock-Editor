@@ -100,13 +100,10 @@ describe.skipIf(!browserPath)(
       await page.locator("#playlist").click();
       const frame = page.getByTestId("editor-window-one");
       expect(await frame.getAttribute("data-kind")).toBe("playlist");
-      expect(await frame.locator(".studio-window-kind").textContent()).toBe(
-        "PL",
-      );
       expect(await frame.locator(".playlist").count()).toBe(0);
       expect(
-        (await frame.locator(".studio-window-kind").boundingBox())!.width,
-      ).toBeLessThan(30);
+        await frame.locator(".studio-window-title").textContent(),
+      ).toBeTruthy();
       expect(await page.locator(".studio-window").count()).toBe(0);
       expect(
         await page.locator(".workspace-frame.arrangement-window").count(),

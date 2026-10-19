@@ -90,7 +90,7 @@ export function App() {
       hideClose?: boolean;
     } | null>(null),
     [importPrompt, setImportPrompt] = useState<ImportPrompt | null>(null);
-  const [status, setStatus] = useState("就绪"),
+  const [status, setStatus] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [transport, setTransport] = useState<TransportState>(audio.getState()),
@@ -798,13 +798,7 @@ export function App() {
       <div className="missing-source">采样已删除</div>
     );
   };
-  const listRow = (
-    s: Source,
-    name: string,
-    color: string,
-    detail: string,
-    index: number,
-  ) => (
+  const listRow = (s: Source, name: string, color: string, detail: string) => (
     <button
       key={s.id}
       data-testid={`source-${s.id}`}
@@ -838,7 +832,6 @@ export function App() {
         <b>{name}</b>
         <small>{detail}</small>
       </span>
-      <span className="source-index">{String(index + 1).padStart(2, "0")}</span>
     </button>
   );
   const renderPlaylist = () => (
@@ -1037,7 +1030,7 @@ export function App() {
                     label: "关于 Pomelene Noteblock Editor",
                     action: () =>
                       setInfo({
-                        title: "Pomelene Noteblock Editor 0.5.2",
+                        title: "Pomelene Noteblock Editor 0.5.3",
                         body: (
                           <p>
                             Windows 桌面编辑器 · 新工作区
@@ -1068,14 +1061,11 @@ export function App() {
             ))}
             <span className="spacer" />
             <span className="version-label">
-              POMELENE <b>NOTEBLOCK EDITOR</b> <small>0.5.2</small>
+              Pomelene <small>0.5.3</small>
             </span>
           </div>
           <header className="transport-bar">
             <div className="project-badge">
-              <span className="project-icon">
-                <Music2 size={20} />
-              </span>
               <div>
                 <button
                   className="project-name"
@@ -1106,7 +1096,7 @@ export function App() {
                   setMode("song");
                 }}
               >
-                SONG
+                整曲
               </button>
               <button
                 className={mode === "source" ? "on" : ""}
@@ -1118,7 +1108,7 @@ export function App() {
                   setMode("source");
                 }}
               >
-                {source.kind === "pattern" ? "PAT" : "SMP"}
+                当前片段
               </button>
             </div>
             <button
@@ -1157,7 +1147,7 @@ export function App() {
               <Repeat2 size={17} />
             </button>
             <div className="transport-number">
-              <label>TEMPO</label>
+              <label>速度</label>
               <input
                 aria-label="BPM"
                 type="number"
@@ -1299,7 +1289,7 @@ export function App() {
             title="快捷键 F1"
             onClick={showShortcutHelp}
           >
-            F1
+            帮助
           </button>
         </div>
       )}
@@ -1373,7 +1363,7 @@ export function App() {
                 <>
                   <div className="library-label">
                     <Grid2X2 size={12} />
-                    <span>PATTERNS</span>
+                    <span>Pattern</span>
                     <small>{project.patterns.length}</small>
                     <button
                       aria-label="新增 Pattern"
@@ -1387,13 +1377,12 @@ export function App() {
                     .filter((p) =>
                       p.name.toLowerCase().includes(query.toLowerCase()),
                     )
-                    .map((p, i) =>
+                    .map((p) =>
                       listRow(
                         { kind: "pattern", id: p.id },
                         p.name,
                         p.color,
-                        `${p.length} ticks · ${p.notes.length} notes`,
-                        i,
+                        `${p.notes.length} 音符`,
                       ),
                     )}
                   {!project.patterns.length && (
@@ -1411,7 +1400,7 @@ export function App() {
                   <div className="library-label">
                     <LockKeyhole size={12} />
                     <span>片段采样</span>
-                    <small>{project.phrases?.length ?? 0}</small>
+                    <small>{project.phrases?.length || ""}</small>
                     <button
                       aria-label="导入片段采样"
                       title="导入 NBS 只读片段"
@@ -1424,21 +1413,16 @@ export function App() {
                     .filter((p) =>
                       p.name.toLowerCase().includes(query.toLowerCase()),
                     )
-                    .map((p, i) =>
+                    .map((p) =>
                       listRow(
                         { kind: "phrase", id: p.id },
                         p.name,
                         p.color,
-                        `只读 · ${p.length} ticks · ${p.notes.length} notes`,
-                        i,
+                        `只读 · ${p.notes.length} 音符`,
                       ),
                     )}
                   {!project.phrases?.length && (
                     <div className="phrase-library-empty">
-                      <p>可复用的只读乐段</p>
-                      <small>
-                        导入 NBS，或把 Pattern / 编排选区保存为采样。
-                      </small>
                       <button onClick={() => void file("importPhrase")}>
                         导入 NBS 片段
                       </button>
@@ -1446,7 +1430,7 @@ export function App() {
                         disabled={source.kind !== "pattern" || !selectedObj}
                         onClick={() => void freezePattern(source.id)}
                       >
-                        保存所选 Pattern 为采样
+                        从当前 Pattern 创建
                       </button>
                     </div>
                   )}
@@ -1461,9 +1445,7 @@ export function App() {
                     音频 / 乐器资源 <small>{project.samples.length}</small>
                   </summary>
                   <div className="library-label">
-                    <AudioLines size={12} />
-                    <span>AUDIO RESOURCES</span>
-                    <small>{project.samples.length}</small>
+                    <span className="spacer" />
                     <button
                       aria-label="自定义音色与映射"
                       title="自定义音色与映射"
@@ -1483,7 +1465,7 @@ export function App() {
                     .filter((s) =>
                       s.name.toLowerCase().includes(query.toLowerCase()),
                     )
-                    .map((s, i) =>
+                    .map((s) =>
                       listRow(
                         { kind: "sample", id: s.id },
                         s.name,
@@ -1493,7 +1475,6 @@ export function App() {
                           : s.dataUrl
                             ? "项目音频"
                             : "音频未关联",
-                        i,
                       ),
                     )}
                 </details>
@@ -1503,27 +1484,8 @@ export function App() {
               )}
             </div>
             <div className="browser-selected">
-              <span
-                className="source-icon"
-                style={{ color: selectedObj?.color }}
-              >
-                {source.kind === "pattern" ? (
-                  <Grid2X2 size={20} />
-                ) : source.kind === "phrase" ? (
-                  <LockKeyhole size={20} />
-                ) : (
-                  <AudioLines size={22} />
-                )}
-              </span>
               <div>
                 <strong>{selectedObj?.name ?? "选择一个对象"}</strong>
-                <small>
-                  {source.kind === "pattern"
-                    ? "PATTERN SOURCE"
-                    : source.kind === "phrase"
-                      ? "只读片段采样"
-                      : "音频 / 乐器资源"}
-                </small>
               </div>
               <button
                 aria-label="打开所选对象"
@@ -1560,7 +1522,7 @@ export function App() {
               <WindowFrame
                 view={playlistView}
                 className="arrangement-window"
-                title="Playlist · 整曲编排"
+                title="整曲编排"
                 active={!active}
                 onChange={(patch) =>
                   setPlaylistView((v) => ({ ...v, ...patch }))
@@ -1679,7 +1641,6 @@ export function App() {
                 </button>
               ))}
               <span className="spacer" />
-              <span className="dock-hint">双击对象新建编辑实例</span>
             </div>
           </div>
         </div>
@@ -1702,7 +1663,6 @@ export function App() {
         </div>
       )}
       <footer className="statusbar" role="status">
-        <span className={`status-dot ${busy ? "busy" : ""}`} />
         <span>
           {busy
             ? "正在处理文件…"
@@ -1711,25 +1671,12 @@ export function App() {
               : status}
         </span>
         <span className="spacer" />
-        <span className="transport-state">
-          {transport.status === "playing"
-            ? "PLAYING"
-            : transport.status === "paused"
-              ? "PAUSED"
-              : "READY"}
-        </span>
-        <span>
-          {[...project.patterns, ...(project.phrases ?? [])]
-            .reduce((a, p) => a + p.notes.length, 0)
-            .toLocaleString()}{" "}
-          NOTES
-        </span>
         <span>
           {snapshot.document.dirty
-            ? "● 未保存"
+            ? "未保存"
             : snapshot.document.path
               ? "已保存"
-              : "未写入文件"}
+              : ""}
         </span>
       </footer>
       <ContextMenu menu={menuState} onClose={() => setMenuState(null)} />

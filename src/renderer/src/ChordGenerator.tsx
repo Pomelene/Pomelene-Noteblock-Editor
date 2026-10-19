@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Headphones, Music2, Plus, X } from "lucide-react";
+import { Headphones, Plus, X } from "lucide-react";
 import {
   CHORD_QUALITIES,
   NOTE_NAMES,
@@ -155,7 +155,6 @@ export function ChordGenerator({
     <aside className="chord-generator" aria-label="和弦生成面板">
       <header>
         <div>
-          <Music2 size={15} />
           <strong>和弦生成器</strong>
         </div>
         <button
@@ -169,17 +168,12 @@ export function ChordGenerator({
       <div className="chord-target">
         <span>
           落点{" "}
-          <b>
+          <b title={`第 ${measure} 小节，第 ${beat} 拍`}>
             {measure}:{String(beat).padStart(2, "0")}:{fraction}
           </b>
         </span>
-        <span>
-          {Number(tick.toFixed(3))} tick · 图层 {layer + 1}
-        </span>
+        <span title={`${Number(tick.toFixed(3))} tick`}>图层 {layer + 1}</span>
       </div>
-      <p className="chord-hint">
-        在网格左键选择落点{"；钢琴卷帘同时选择根音"}。右键仍可连续擦除。
-      </p>
       <div className="chord-summary">
         <strong>{name}</strong>
         <span>{pitches.map(pitchName).join(" · ") || "请调整音区"}</span>
@@ -236,9 +230,7 @@ export function ChordGenerator({
         </label>
       </div>
       <section className="chord-diatonic">
-        <div className="chord-section-title">
-          调内和弦 <small>点击选择，再放置</small>
-        </div>
+        <div className="chord-section-title">调内和弦</div>
         <div className="chord-fields">
           <label>
             调性
@@ -402,7 +394,10 @@ export function ChordGenerator({
             ))}
         </select>
       </label>
-      <label className="chord-check">
+      <label
+        className="chord-check"
+        title="仅替换生成时刻的当前音色；保留其他音色和锁定音符"
+      >
         <input
           type="checkbox"
           checked={replace}
@@ -410,11 +405,17 @@ export function ChordGenerator({
         />
         替换落点处当前音色
       </label>
-      <p className="chord-hint">
-        默认追加并自动分配空闲图层。替换仅影响生成时刻的当前音色，保留锁定音符。
-      </p>
+      <details className="chord-help">
+        <summary>使用说明</summary>
+        <p className="chord-hint">
+          左键选落点，钢琴卷帘同时选根音。选择和弦后点击放置；Ctrl+Z 撤销整组。
+        </p>
+        <p className="chord-hint">
+          默认追加并自动分配空闲图层。替换仅影响生成时刻的当前音色，保留其他音色和锁定音符。
+        </p>
+      </details>
       <div className={`chord-message${error ? " error" : ""}`} role="status">
-        {error || message || "每次放置可一步撤销"}
+        {error || message}
       </div>
     </aside>
   );

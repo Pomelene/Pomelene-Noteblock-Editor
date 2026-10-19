@@ -168,8 +168,7 @@ export function PatternEditor({
   );
   const selected = pattern.notes.filter((n) => selectedIds.has(n.id)),
     first = selected[0],
-    ins = project.instruments.find((i) => i.id === instrument),
-    sample = project.samples.find((s) => s.id === ins?.sampleId);
+    ins = project.instruments.find((i) => i.id === instrument);
   useEffect(() => {
     const el = scroller.current!;
     const ro = new ResizeObserver(() =>
@@ -234,7 +233,7 @@ export function PatternEditor({
     el.width = view.w * ratio;
     el.height = view.h * ratio;
     ctx.scale(ratio, ratio);
-    ctx.fillStyle = "#20282e";
+    ctx.fillStyle = "#282828";
     ctx.fillRect(0, 0, view.w, view.h);
     ctx.font = "10px Segoe UI, Microsoft YaHei";
     ctx.textBaseline = "middle";
@@ -251,14 +250,14 @@ export function PatternEditor({
       ctx.fillStyle =
         mode === "piano"
           ? black
-            ? "#20272e"
-            : "#252e35"
+            ? "#282828"
+            : "#303030"
           : row % 2
-            ? "#242b32"
-            : "#283139";
+            ? "#282828"
+            : "#303030";
       ctx.fillRect(L, y, view.w, rh - 1);
       if (mode === "piano" && midi % 12 === 0) {
-        ctx.fillStyle = "#3b4852";
+        ctx.fillStyle = "#484848";
         ctx.fillRect(L, y + rh - 1, view.w, 1);
       }
     }
@@ -268,17 +267,17 @@ export function PatternEditor({
       const x = L + t * zoom - view.x;
       ctx.fillStyle =
         Math.abs(t / bar - Math.round(t / bar)) < 1e-6
-          ? "#4b5760"
+          ? "#585858"
           : Math.abs(t / 4 - Math.round(t / 4)) < 1e-6
-            ? "#38444e"
-            : "#2c3740";
+            ? "#404040"
+            : "#383838";
       ctx.fillRect(x, H, 1, view.h);
     }
     const endX = L + pattern.length * zoom - view.x;
     if (endX < view.w) {
-      ctx.fillStyle = "#11171d70";
+      ctx.fillStyle = "#18181870";
       ctx.fillRect(Math.max(L, endX), H, view.w - Math.max(L, endX), view.h);
-      ctx.strokeStyle = "#a4b6c0";
+      ctx.strokeStyle = "#b0b0b0";
       ctx.setLineDash([3, 4]);
       ctx.beginPath();
       ctx.moveTo(endX, H);
@@ -326,7 +325,7 @@ export function PatternEditor({
       ctx.fillStyle = active ? "#354338" : color + "70";
       ctx.fillRect(x, y, 2, rh - 4);
       if (mode === "layers") {
-        ctx.fillStyle = "#15262d";
+        ctx.fillStyle = "#202020";
         ctx.fillText(
           pitchName(note.pitch),
           x + 3,
@@ -337,18 +336,18 @@ export function PatternEditor({
       ctx.globalAlpha = 1;
     }
     if (box) {
-      ctx.fillStyle = "#b8d8e52e";
-      ctx.strokeStyle = "#bed7e3";
+      ctx.fillStyle = "#d0d0d02e";
+      ctx.strokeStyle = "#d0d0d0";
       ctx.fillRect(box.x, box.y, box.w, box.h);
       ctx.strokeRect(box.x, box.y, box.w, box.h);
     }
     ctx.restore();
-    ctx.fillStyle = "#29353e";
+    ctx.fillStyle = "#303030";
     ctx.fillRect(0, 0, view.w, H);
     for (let t = Math.floor(from / bar) * bar; t <= to; t += bar) {
       const x = L + t * zoom - view.x;
       if (x < L) continue;
-      ctx.fillStyle = "#b6c3cb";
+      ctx.fillStyle = "#c0c0c0";
       ctx.fillText(String(Math.floor(t / bar) + 1), x + 5, 13);
     }
     ctx.save();
@@ -362,14 +361,14 @@ export function PatternEditor({
       ctx.fillStyle =
         mode === "piano"
           ? black
-            ? "#303b44"
-            : "#bac4c8"
+            ? "#383838"
+            : "#c0c0c0"
           : row === layer
-            ? "#3a4b56"
-            : "#2b353d";
+            ? "#484848"
+            : "#303030";
       ctx.fillRect(0, y, L - 2, rh - 1);
       ctx.fillStyle =
-        mode === "piano" ? (black ? "#9eb0ba" : "#3d4d57") : "#b4c4cd";
+        mode === "piano" ? (black ? "#b0b0b0" : "#484848") : "#c0c0c0";
       ctx.fillText(
         mode === "piano"
           ? midi % 12 === 0 || midi === 66
@@ -386,10 +385,10 @@ export function PatternEditor({
       }
     }
     ctx.restore();
-    ctx.fillStyle = "#29353e";
+    ctx.fillStyle = "#303030";
     ctx.fillRect(0, 0, L, H);
-    ctx.fillStyle = "#9fb6c5";
-    ctx.fillText(mode === "piano" ? "KEY / TIME" : "LAYER / TIME", 7, 13);
+    ctx.fillStyle = "#b0b0b0";
+
     const x = L + (playTick ?? cursor) * zoom - view.x;
     if (x >= L && x < view.w) {
       ctx.fillStyle = "#e7b66e";
@@ -923,12 +922,8 @@ export function PatternEditor({
           className="instrument-strip instrument-focus-header"
           data-testid="instrument-strip"
         >
-          <span
-            className="instrument-dot"
-            style={{ background: sample?.color }}
-          />
           <label>
-            当前落笔音色
+            音色
             <select
               aria-label="落笔音色"
               value={instrument}
@@ -943,9 +938,6 @@ export function PatternEditor({
               ))}
             </select>
           </label>
-          <span className="instrument-focus-count" aria-live="polite">
-            {choices.find((i) => i.id === instrument)?.count ?? 0} 音符
-          </span>
           <button
             title="预听当前音色"
             aria-label="预听当前音色"
@@ -974,10 +966,10 @@ export function PatternEditor({
             onClick={() => setShowAllInstruments((v) => !v)}
           >
             <Layers size={14} />
-            {showAllInstruments ? "全部清晰" : "聚焦当前"}
+            {showAllInstruments ? "显示全部" : "突出当前"}
           </button>
           <label>
-            落笔层
+            图层
             <select
               aria-label="落笔图层"
               value={layer}
@@ -1069,10 +1061,6 @@ export function PatternEditor({
           }}
         >
           {choices.map((choice) => {
-            const def = project.instruments.find((i) => i.id === choice.id);
-            const color =
-              project.samples.find((s) => s.id === def?.sampleId)?.color ??
-              pattern.color;
             return (
               <button
                 key={choice.id}
@@ -1086,15 +1074,9 @@ export function PatternEditor({
                 title={`${choice.name} · ${choice.count} 音符 · G/K 切换 · H/J 已使用音色`}
                 onClick={() => setInstrument(choice.id)}
               >
-                <span
-                  className="instrument-chip-dot"
-                  style={{ background: color }}
-                  aria-hidden="true"
-                />
                 <span className="instrument-chip-name">{choice.name}</span>
-                <span className="instrument-chip-count">{choice.count}</span>
-                {choice.id === instrument && (
-                  <span className="instrument-chip-current">当前</span>
+                {choice.count > 0 && (
+                  <span className="instrument-chip-count">{choice.count}</span>
                 )}
               </button>
             );
@@ -1312,7 +1294,7 @@ export function PatternEditor({
                 if (chordOpen && e.button === 0 && !e.ctrlKey) {
                   if (mode === "piano") setPitch(p.pitch);
                   else setLayer(p.row);
-                  setFeedback("已选择和弦落点 · 在右侧放置和弦");
+                  setFeedback("");
                   return;
                 }
                 if (e.ctrlKey || tool === "select") {
@@ -1665,9 +1647,7 @@ export function PatternEditor({
         )}
       </div>
       <div className="velocity-lane">
-        <span className="velocity-label">
-          VELOCITY<small>{ids.length ? "选区" : "当前图层"}</small>
-        </span>
+        <span className="velocity-label">力度</span>
         <div className="velocity-bars">
           {visibleNotes.map((n) => (
             <button
@@ -1736,8 +1716,7 @@ export function PatternEditor({
           {pattern.notes.length} 音符 · {pattern.layers.length} 图层
         </span>
         <span className="gesture-feedback" role="status">
-          {feedback ||
-            "Ctrl+滚轮 时间缩放 · P 绘制 · B 连续笔刷 · 右键擦除 · Alt 自由定位"}
+          {feedback}
         </span>
         <span className="spacer" />
         <span>

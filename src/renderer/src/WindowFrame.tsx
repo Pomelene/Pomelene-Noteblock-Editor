@@ -187,16 +187,6 @@ export function WindowFrame({
           if (!(event.target as Element).closest("button")) toggleMaximize();
         }}
       >
-        <span
-          className={`studio-window-kind ${view.kind === "playlist" ? "kind-playlist" : view.kind}`}
-          aria-hidden="true"
-        >
-          {view.kind === "playlist"
-            ? "PL"
-            : view.kind === "pattern"
-              ? "P"
-              : "S"}
-        </span>
         <span className="studio-window-title">{title}</span>
         <div className="studio-window-actions">
           <button

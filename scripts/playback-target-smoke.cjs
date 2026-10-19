@@ -57,7 +57,7 @@ async function check(name, fn) {
       async () => {
         await page.getByTestId(`source-${a.id}`).click();
         await selectClip(b.id);
-        await page.getByRole("button", { name: "PAT", exact: true }).click();
+        await page.getByRole("button", { name: "当前片段", exact: true }).click();
         await page.getByLabel("播放", { exact: true }).click();
         await expect.poll(async () => (await last())?.scope).toBe(b.id);
         await page.getByLabel("终止", { exact: true }).click();
@@ -105,7 +105,7 @@ async function check(name, fn) {
       "Selecting a Pattern while SONG plays preserves song playback",
       async () => {
         await page.keyboard.press("F5");
-        await page.getByRole("button", { name: "SONG", exact: true }).click();
+        await page.getByRole("button", { name: "整曲", exact: true }).click();
         await page.getByLabel("播放", { exact: true }).click();
         await expect.poll(async () => (await last())?.scope).toBe("song");
         await selectClip(a.id);

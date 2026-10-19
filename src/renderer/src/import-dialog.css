@@ -7,7 +7,7 @@
   border-radius: 7px;
   background: var(--panel);
   color: var(--text);
-  box-shadow: 0 24px 100px #000b;
+  box-shadow: none;
   font-size: 12px;
   line-height: 1.55;
 }
@@ -16,7 +16,7 @@
   flex-direction: column;
 }
 .import-dialog::backdrop {
-  background: #10171dcc;
+  background: #181818cc;
 }
 .import-header {
   display: flex;
@@ -73,7 +73,7 @@
 .import-source span {
   display: block;
   margin-top: 2px;
-  color: #b0bbc1;
+  color: #b8b8b8;
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -90,7 +90,7 @@
   border-radius: 3px;
 }
 .import-facts dt {
-  color: #b0bbc1;
+  color: #b8b8b8;
   font-size: 12px;
 }
 .import-facts dd {
@@ -116,7 +116,7 @@
   text-align: left;
 }
 .import-comparison thead th {
-  color: #b0bbc1;
+  color: #b8b8b8;
   font-weight: 400;
 }
 .import-comparison tbody th {
@@ -138,7 +138,7 @@
   font-weight: 600;
 }
 .import-section-heading > span {
-  color: #b0bbc1;
+  color: #b8b8b8;
   font-size: 12px;
 }
 .import-groups ul {
@@ -171,7 +171,7 @@
 }
 .import-groups li div > span {
   display: block;
-  color: #b0bbc1;
+  color: #b8b8b8;
   overflow-wrap: anywhere;
 }
 .import-group-counts {
@@ -202,7 +202,7 @@
   margin: 13px 0 0;
 }
 .import-algorithm {
-  color: #b0bbc1;
+  color: #b8b8b8;
   font-size: 12px;
   margin: 6px 0 0;
 }
@@ -256,12 +256,12 @@
 }
 .import-actions > span {
   margin-right: auto;
-  color: #b0bbc1;
+  color: #b8b8b8;
 }
 .import-actions > button {
   min-height: 32px;
   min-width: 76px;
-  border-color: #59656d;
+  border-color: #606060;
 }
 .import-actions .import-primary {
   background: #719b88;

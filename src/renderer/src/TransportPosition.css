@@ -9,11 +9,11 @@
   height: 48px;
   margin-left: 9px;
   padding: 4px 10px;
-  border: 1px solid #1b2932;
+  border: 0;
   border-radius: 4px;
-  background: #202d37;
-  box-shadow: inset 0 1px 5px #0003;
-  color: #c5d9e5;
+  background: transparent;
+  box-shadow: none;
+  color: #d8d8d8;
   font:
     22px/27px Consolas,
     "Liberation Mono",
@@ -36,20 +36,21 @@
   letter-spacing: 0;
 }
 .transport-position-label {
-  color: #9db1bf;
+  color: #b0b0b0;
   font:
     8px/10px "Segoe UI",
     sans-serif;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
   text-align: center;
+  font-size: 9px;
 }
 .transport-position-bar .transport-position-label {
   justify-self: end;
-  width: 3ch;
-  font-family: Consolas, "Liberation Mono", monospace;
+  width: auto;
+  font-family: inherit;
 }
 .transport-position-separator {
-  color: #829cab;
+  color: #989898;
   text-align: center;
 }
 @media (max-width: 1250px) {

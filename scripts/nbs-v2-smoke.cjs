@@ -184,7 +184,7 @@ fs.mkdirSync(folder, { recursive: true });
     );
 
     const requests = await app.evaluate(() => globalThis.saveRequests);
-    await page.getByRole("button", { name: "SONG", exact: true }).click();
+    await page.getByRole("button", { name: "整曲", exact: true }).click();
     await page
       .getByRole("button", { name: "播放", exact: true })
       .first()

@@ -75,7 +75,7 @@ export function PhrasePreview({
     el.width = Math.round(view.width * ratio);
     el.height = Math.round(view.height * ratio);
     ctx.scale(ratio, ratio);
-    ctx.fillStyle = "#222a2f";
+    ctx.fillStyle = "#282828";
     ctx.fillRect(0, 0, view.width, view.height);
     ctx.font = "11px Segoe UI, Microsoft YaHei";
     ctx.textBaseline = "middle";
@@ -83,10 +83,10 @@ export function PhrasePreview({
       const y = top + (high - pitch) * row - view.y;
       if (y + row < top || y > view.height) continue;
       ctx.fillStyle = [1, 3, 6, 8, 10].includes(pitch % 12)
-        ? "#20282e"
-        : "#293238";
+        ? "#282828"
+        : "#303030";
       ctx.fillRect(left, y, view.width, row - 1);
-      ctx.fillStyle = "#a9b5bc";
+      ctx.fillStyle = "#b0b0b0";
       ctx.fillText(pitchName(pitch), 12, y + row / 2);
     }
     const stride = zoom < 10 ? 4 : 1;
@@ -97,7 +97,7 @@ export function PhrasePreview({
     ) {
       const x = left + t * zoom - view.x;
       if (x < left) continue;
-      ctx.fillStyle = t % 4 === 0 ? "#435058" : "#333e46";
+      ctx.fillStyle = t % 4 === 0 ? "#505050" : "#404040";
       ctx.fillRect(x, top, 1, view.height);
     }
     ctx.save();
@@ -117,9 +117,9 @@ export function PhrasePreview({
     }
     ctx.globalAlpha = 1;
     ctx.restore();
-    ctx.fillStyle = "#303940";
+    ctx.fillStyle = "#383838";
     ctx.fillRect(0, 0, view.width, top);
-    ctx.fillStyle = "#b8c4c9";
+    ctx.fillStyle = "#c0c0c0";
     ctx.fillText("TICK", 12, top / 2);
     for (
       let t = Math.floor(view.x / zoom / 4) * 4;

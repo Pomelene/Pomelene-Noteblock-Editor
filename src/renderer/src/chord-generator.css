@@ -7,10 +7,10 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 12px;
-  border-left: 1px solid #14232b;
-  background: #222d34;
-  color: #c3d2d9;
+  padding: 10px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  color: #d0d0d0;
   font-size: 12px;
   scrollbar-width: thin;
 }
@@ -19,15 +19,15 @@
 .chord-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 .chord-generator header {
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 .chord-generator header strong {
   font-size: 13px;
-  color: #e0e9ed;
+  color: #e8e8e8;
 }
 .chord-generator header button {
   padding: 4px;
@@ -39,42 +39,43 @@
   flex-wrap: wrap;
   gap: 4px;
   font-size: 11px;
-  color: #a9bec9;
+  color: #b8b8b8;
 }
 .chord-target b {
   color: #e4c286;
   font-variant-numeric: tabular-nums;
 }
 .chord-hint {
-  color: #a0b4bf;
+  color: #b0b0b0;
   line-height: 1.6;
   font-size: 11px;
   margin: 8px 0;
 }
 .chord-summary {
-  padding: 12px;
-  background: #1b252c;
-  border: 1px solid #3c555b;
-  border-radius: 5px;
+  padding: 8px 0 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 4px;
 }
 .chord-summary strong {
-  font-size: 26px;
-  color: #92d6ba;
+  font-size: 21px;
+  color: var(--text);
   line-height: 1.1;
 }
 .chord-summary span {
   font-size: 12px;
-  color: #e2e9ed;
+  color: #e8e8e8;
   overflow-wrap: anywhere;
 }
 .chord-summary small {
-  color: #a4bbc7;
+  color: #b8b8b8;
 }
 .chord-actions {
-  margin: 10px 0 14px;
+  margin: 8px 0 10px;
+  gap: 4px;
 }
 .chord-actions button {
   display: flex;
@@ -106,7 +107,7 @@
   flex-direction: column;
   gap: 5px;
   font-size: 11px;
-  color: #b0c4cf;
+  color: #c0c0c0;
 }
 .chord-generator select,
 .chord-generator input[type="number"] {
@@ -114,7 +115,7 @@
   min-width: 0;
   height: 28px;
   font-size: 12px;
-  color: #e2e9ed;
+  color: #e8e8e8;
 }
 .chord-fields small {
   color: #9fc9b7;
@@ -123,28 +124,29 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 14px;
+  margin-top: 10px;
 }
 .chord-section-title small {
-  color: #98adb8;
+  color: #a8a8a8;
   font-size: 10px;
 }
 .chord-degrees {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 5px;
+  gap: 0;
 }
 .chord-degrees button {
-  min-height: 43px;
+  min-height: 36px;
   padding: 5px 2px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   font-size: 12px;
+  border-radius: 0;
 }
 .chord-degrees small {
-  color: #a7bac4;
+  color: #b8b8b8;
   font-size: 10px;
 }
 .chord-degrees button[aria-pressed="true"] {
@@ -153,14 +155,14 @@
   color: #dbf4e6;
 }
 .chord-generator details {
-  border-top: 1px solid #3a4851;
-  border-bottom: 1px solid #3a4851;
-  margin-top: 14px;
-  padding: 10px 0;
+  border-top: 1px solid #484848;
+  border-bottom: 1px solid #484848;
+  margin-top: 10px;
+  padding: 8px 0;
 }
 .chord-generator summary {
   cursor: pointer;
-  color: #d1dde3;
+  color: #d8d8d8;
 }
 .chord-check {
   display: flex;
@@ -180,8 +182,8 @@
   color: #a9d7bc;
   font-size: 11px;
   line-height: 1.5;
-  padding-top: 6px;
-  min-height: 22px;
+  padding-top: 2px;
+  min-height: 0;
 }
 .chord-message.error {
   color: #efb29c;
@@ -202,7 +204,7 @@
     flex: 0 1 44%;
     width: 100%;
     border-left: 0;
-    border-top: 1px solid #41535d;
+    border-top: 1px solid #505050;
   }
   .chord-degrees {
     grid-template-columns: repeat(7, minmax(0, 1fr));

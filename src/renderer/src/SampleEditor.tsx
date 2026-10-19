@@ -204,47 +204,57 @@ export function SampleEditor({
           </span>
         </div>
         {used.map((i) => (
-          <Fragment key={i.id}><div className="instrument-setting">
-            <span>{i.name}</span>
-            <label>
-              NBS 调音
-              <select
-                aria-label={`乐器 ${i.id} 调音`}
-                value={i.key}
-                disabled={i.id < 16}
-                title={
-                  i.id < 16
-                    ? "原版乐器调音由 NBS 格式固定"
-                    : "自定义乐器 NBS 调音"
-                }
-                onChange={(e) =>
-                  void run({
-                    type: "instrument:update",
-                    id: i.id,
-                    patch: { key: +e.target.value },
-                  })
+          <Fragment key={i.id}>
+            <div className="instrument-setting">
+              <span>{i.name}</span>
+              <label>
+                NBS 调音
+                <select
+                  aria-label={`乐器 ${i.id} 调音`}
+                  value={i.key}
+                  disabled={i.id < 16}
+                  title={
+                    i.id < 16
+                      ? "原版乐器调音由 NBS 格式固定"
+                      : "自定义乐器 NBS 调音"
+                  }
+                  onChange={(e) =>
+                    void run({
+                      type: "instrument:update",
+                      id: i.id,
+                      patch: { key: +e.target.value },
+                    })
+                  }
+                >
+                  {Array.from({ length: 88 }, (_, n) => (
+                    <option value={n} key={n}>
+                      {pitchName(n + 21)} · {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                title="以 F♯4 预听"
+                aria-label={`预听乐器 ${i.id}`}
+                onClick={() =>
+                  void audio
+                    .preview(project, i.id, 66)
+                    .catch((e) => report(e.message))
                 }
               >
-                {Array.from({ length: 88 }, (_, n) => (
-                  <option value={n} key={n}>
-                    {pitchName(n + 21)} · {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              title="以 F♯4 预听"
-              aria-label={`预听乐器 ${i.id}`}
-              onClick={() =>
-                void audio
-                  .preview(project, i.id, 66)
-                  .catch((e) => report(e.message))
-              }
-            >
-              <Volume2 size={15} />
-            </button>
-          </div>
-          {(i.id >= 16 || i.mappingTargetId !== undefined || (!sample.builtin && !sample.dataUrl)) && <InstrumentMappingControls project={project} instrument={i} run={run} report={report} />}
+                <Volume2 size={15} />
+              </button>
+            </div>
+            {(i.id >= 16 ||
+              i.mappingTargetId !== undefined ||
+              (!sample.builtin && !sample.dataUrl)) && (
+              <InstrumentMappingControls
+                project={project}
+                instrument={i}
+                run={run}
+                report={report}
+              />
+            )}
           </Fragment>
         ))}
         {!used.length && (

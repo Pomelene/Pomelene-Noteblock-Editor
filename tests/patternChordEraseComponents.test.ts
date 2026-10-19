@@ -218,9 +218,9 @@ describe.skipIf(!executablePath)(
           [4, 2, 15],
           [8, 2, 15],
         ]);
-        expect(await p.locator(".chord-target").textContent()).toContain(
-          "12 tick",
-        );
+        expect(
+          await p.locator(".chord-target span").last().getAttribute("title"),
+        ).toBe("12 tick");
         await p.getByRole("button", { name: "放置和弦", exact: true }).click();
         expect((await notes(p)).slice(3).map((n: any) => n.tick)).toEqual([
           12, 16, 20,

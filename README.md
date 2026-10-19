@@ -1,14 +1,14 @@
-# Pomelene Noteblock Editor 0.5.2
+# Pomelene Noteblock Editor 0.5.3
 
 Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录是独立重构工程，旧版 `desktop` 保留。
 
 远端代码仓库：[Pomelene/Pomelene-Noteblock-Editor](https://github.com/Pomelene/Pomelene-Noteblock-Editor)（私有）。`main` 保存当前代码，版本标签保留已交付源码，`legacy/desktop-0.2` 保留旧工程提交历史。开发与本地文件保留规则见 [仓库与产物管理](docs/repository-and-retention.md)。
 
-当前开发版 **0.5.2** 将已确认的和弦实验室接入正式 Pattern 编辑器，支持调内和弦、转位／附加音／开放排列、上下行分解、实际音色试听及整组撤销。网格左键选落点，默认追加并分配空闲图层；替换只影响生成时刻当前音色的未锁定音符。
+当前开发版 **0.5.3** 进行视觉减法：暗色中性灰界面，去掉装饰渐变、厚阴影、重复徽标、零数量和常驻快捷键长提示，压缩音色标签与参数面板的视觉间隙。关键选中状态、音符颜色、锁定／静音／错误提示及键盘焦点保留。
 
-本轮 [0.5.2 验证记录](docs/validation-0.5.2.md)：302 项自动测试、34 项打包桌面检查。
+播放范围显示“整曲／当前片段”，速度、拍号和播放位置用中文标识。和弦详细说明收进面板的“使用说明”，完整操作与快捷键仍可通过 F1／帮助菜单查看。0.5.2 的和弦生成与连续擦除功能继续保留。
 
-按住右键可连续擦除实际碰到的音符，快速移动仍检测沿途命中，整次拖动只记一次撤销；Escape／失焦取消。编排和 Pattern 的行高设置继续位于工具栏左侧。独立的 [和弦实验室 Demo 01](demos/chord-lab/README.md) 保留作原型记录。
+本轮验证见 [0.5.3 验证记录](docs/validation-0.5.3.md)；此前 [0.5.2 记录](docs/validation-0.5.2.md) 保留和弦算法、文件及音频测试依据。
 
 工程仍使用带版本前缀和 CRC32 校验的 v2 格式；此前 NBS 控制事件与格式支持见 [工程 v2 与 NBS 控制事件](docs/project-v2.md) 与 [0.5.1 验证记录](docs/validation-0.5.1.md)。
 

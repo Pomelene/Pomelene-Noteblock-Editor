@@ -23,21 +23,21 @@ export function TransportPosition({
         aria-hidden="true"
       >
         <span className="transport-position-value">{bar}</span>
-        <small className="transport-position-label">BAR</small>
+        <small className="transport-position-label">小节</small>
       </span>
       <span className="transport-position-separator" aria-hidden="true">
         ·
       </span>
       <span className="transport-position-field" aria-hidden="true">
         <span className="transport-position-value">{beat}</span>
-        <small className="transport-position-label">BEAT</small>
+        <small className="transport-position-label">拍</small>
       </span>
       <span className="transport-position-separator" aria-hidden="true">
         ·
       </span>
       <span className="transport-position-field" aria-hidden="true">
         <span className="transport-position-value">{subTick}</span>
-        <small className="transport-position-label">TICK</small>
+        <small className="transport-position-label">刻度</small>
       </span>
     </div>
   );

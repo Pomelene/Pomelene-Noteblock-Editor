@@ -190,7 +190,7 @@ export function Playlist({
     el.width = Math.round(view.w * ratio);
     el.height = Math.round(view.h * ratio);
     ctx.scale(ratio, ratio);
-    ctx.fillStyle = "#20262b";
+    ctx.fillStyle = "#282828";
     ctx.fillRect(0, 0, view.w, view.h);
     ctx.font = "11px Segoe UI, Microsoft YaHei";
     ctx.textBaseline = "middle";
@@ -200,9 +200,9 @@ export function Playlist({
     ctx.clip();
     for (let r = 0; r < project.tracks.length; r++) {
       const y = TOP + r * ROW - view.y;
-      ctx.fillStyle = r % 2 ? "#20262c" : "#232a30";
+      ctx.fillStyle = r % 2 ? "#262626" : "#2a2a2a";
       ctx.fillRect(LEFT, y, view.w, ROW);
-      ctx.fillStyle = "#13191d";
+      ctx.fillStyle = "#181818";
       ctx.fillRect(LEFT, y + ROW - 1, view.w, 1);
     }
     const from = Math.floor(view.x / zoom),
@@ -212,10 +212,10 @@ export function Playlist({
       const x = LEFT + t * zoom - view.x;
       ctx.fillStyle =
         Math.abs(t / bar - Math.round(t / bar)) < 1e-6
-          ? "#485159"
+          ? "#505050"
           : Math.abs(t / 4 - Math.round(t / 4)) < 1e-6
-            ? "#343e46"
-            : "#2a333b";
+            ? "#404040"
+            : "#303030";
       ctx.fillRect(x, TOP, 1, view.h);
     }
     for (const original of [
@@ -243,9 +243,9 @@ export function Playlist({
       ctx.lineWidth = active ? 2 : 1;
       ctx.strokeRect(x + 1.5, y + 0.5, Math.max(3, w), h - 1);
       ctx.lineWidth = 1;
-      ctx.fillStyle = "#182226";
+      ctx.fillStyle = "#202020";
       ctx.fillText(
-        (c.kind === "sample" ? "≋  " : "▤  ") + info.name,
+        info.name,
         Math.max(LEFT + 5, x + 7),
         y + Math.min(9, h / 2),
         Math.max(1, w - 12),
@@ -273,7 +273,7 @@ export function Playlist({
         }
         if (h >= 28 && c.length + c.offset > pattern.length) {
           const emptyX = x + Math.max(0, pattern.length - c.offset) * zoom;
-          ctx.fillStyle = "#12191e55";
+          ctx.fillStyle = "#18181855";
           ctx.fillRect(
             Math.max(x, emptyX),
             y + 18,
@@ -310,13 +310,13 @@ export function Playlist({
       ctx.globalAlpha = 1;
     }
     if (box) {
-      ctx.fillStyle = "#b6d8e528";
-      ctx.strokeStyle = "#b6d8e5";
+      ctx.fillStyle = "#d0d0d028";
+      ctx.strokeStyle = "#d0d0d0";
       ctx.fillRect(box.x, box.y, box.w, box.h);
       ctx.strokeRect(box.x, box.y, box.w, box.h);
     }
     ctx.restore();
-    ctx.fillStyle = "#2a3238";
+    ctx.fillStyle = "#303030";
     ctx.fillRect(0, 0, view.w, TOP);
     if (project.loop.enabled) {
       const x = LEFT + project.loop.start * zoom - view.x,
@@ -332,7 +332,7 @@ export function Playlist({
     for (let t = Math.floor(from / bar) * bar; t <= to; t += bar) {
       const x = LEFT + t * zoom - view.x;
       if (x < LEFT) continue;
-      ctx.fillStyle = "#b0b9bd";
+      ctx.fillStyle = "#b8b8b8";
       ctx.fillText(String(Math.floor(t / bar) + 1), x + 6, 15);
     }
     ctx.save();
@@ -342,31 +342,37 @@ export function Playlist({
     project.tracks.forEach((track, i) => {
       const y = TOP + i * ROW - view.y;
       if (y + ROW < TOP || y > view.h) return;
-      ctx.fillStyle = "#293137";
+      ctx.fillStyle = "#303030";
       ctx.fillRect(0, y, LEFT - 1, ROW - 1);
       ctx.fillStyle = track.color;
       ctx.fillRect(0, y + 6, 3, ROW - 13);
-      ctx.fillStyle = "#637078";
+      ctx.fillStyle = "#707070";
       const labelY = ROW < 52 ? ROW / 2 : 18;
       ctx.fillText(String(i + 1).padStart(2, "0"), 10, y + labelY);
-      ctx.fillStyle = "#d0d8dc";
+      ctx.fillStyle = "#d8d8d8";
       ctx.fillText(track.name, 33, y + labelY, LEFT - 42);
       if (ROW >= 52) {
         ctx.fillStyle = track.muted ? "#695a52" : "#8eb99d";
         ctx.fillRect(13, y + 39, 7, 7);
-        ctx.fillStyle = track.solo ? "#e6b675" : "#77848c";
+        ctx.fillStyle = track.solo ? "#e6b675" : "#808080";
         ctx.fillText(
-          track.solo ? "S 独奏" : track.locked ? "已锁定" : "音符 / 素材",
+          track.solo
+            ? "独奏"
+            : track.locked
+              ? "已锁定"
+              : track.muted
+                ? "已静音"
+                : "",
           31,
           y + 43,
         );
       }
     });
     ctx.restore();
-    ctx.fillStyle = "#2a3238";
+    ctx.fillStyle = "#303030";
     ctx.fillRect(0, 0, LEFT, TOP);
-    ctx.fillStyle = "#a2afb6";
-    ctx.fillText("TRACKS", 12, 15);
+    ctx.fillStyle = "#b0b0b0";
+
     const x = LEFT + tick * zoom - view.x;
     if (x >= LEFT && x <= view.w) {
       ctx.fillStyle = "#ecc17d";
@@ -616,7 +622,7 @@ export function Playlist({
 
         <span className="spacer" />
         <span className="small-mono">
-          {project.clips.length} CLIPS · {project.tracks.length} TRACKS
+          {project.clips.length} 个片段 · {project.tracks.length} 轨道
         </span>
       </div>
       <div className="canvas-toolbar">
@@ -1344,16 +1350,11 @@ export function Playlist({
         </div>
       </div>
       <div className="canvas-footer">
-        <span>
-          {ids.length
-            ? `${ids.length} 个引用已选`
-            : "P 绘制 · B 连续笔刷 · 右键擦除 · Ctrl 框选 · Shift 拖动复制"}
-        </span>
+        <span>{ids.length ? `${ids.length} 个引用已选` : ""}</span>
         <span>位置 {Number(cursor.toFixed(3))} tick</span>
         <span className="spacer" />
         <span className={feedback ? "gesture-feedback" : ""} role="status">
-          {feedback ||
-            "Ctrl+滚轮 时间缩放 · 拖动边缘补白 / 裁剪 · Alt 自由定位"}
+          {feedback}
         </span>
       </div>
     </div>

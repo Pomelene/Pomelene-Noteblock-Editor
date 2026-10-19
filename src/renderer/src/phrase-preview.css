@@ -40,7 +40,7 @@
 .phrase-readonly-hint {
   margin: 0;
   padding: 7px 11px;
-  color: #b6c3c9;
+  color: #c0c0c0;
   line-height: 1.5;
   font-size: 12px;
   border-bottom: 1px solid var(--line);
@@ -60,29 +60,23 @@
   gap: 12px;
   min-height: 25px;
   padding: 5px 10px;
-  color: #a2b4be;
+  color: #b0b0b0;
   font-size: 11px;
   border-top: 1px solid var(--line);
 }
 .phrase-library-empty {
   margin: 2px 5px 8px;
-  padding: 10px;
-  border: 1px dashed #697c85;
+  padding: 4px 2px;
+  border: 0;
   border-radius: 3px;
-  color: #b6c4cc;
+  color: #c0c0c0;
   font-size: 12px;
   line-height: 1.6;
-}
-.phrase-library-empty p {
-  margin: 0 0 3px;
-  color: #cbd6dc;
-}
-.phrase-library-empty small {
-  display: block;
-  font-size: 11px;
+  gap: 2px;
+  background: transparent;
 }
 .phrase-library-empty button {
-  margin-top: 8px;
+  margin-top: 0;
   width: 100%;
   min-height: 28px;
   font-size: 11px;
@@ -92,12 +86,12 @@
   margin: 10px 2px 0;
 }
 .audio-resource-library > summary {
-  color: #aab9c2;
+  color: #b8b8b8;
   font-size: 11px;
   padding: 10px 7px;
   cursor: pointer;
 }
 .audio-resource-library > summary small {
   float: right;
-  color: #879ca9;
+  color: #989898;
 }
