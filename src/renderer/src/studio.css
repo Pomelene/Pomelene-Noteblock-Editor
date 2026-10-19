@@ -1197,7 +1197,6 @@ svg {
   background: #927348;
   border-color: #ad8c5f;
 }
-.startup,
 .recovery {
   height: 100%;
   display: flex;
@@ -1207,13 +1206,6 @@ svg {
   gap: 18px;
   color: #c0c0c0;
   background: #303030;
-}
-.startup strong {
-  font-size: 20px;
-  font-weight: 400;
-}
-.startup span {
-  color: #909090;
 }
 .recovery h1 {
   font-size: 20px;

@@ -1,8 +1,9 @@
 import { Component, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { connect } from "./store";
+import { BootGate } from "./BootSplash";
 import "./studio.css";
+import "./aurora-theme.css";
 class Recovery extends Component<{ children: ReactNode }, { error: string }> {
   state = { error: "" };
   static getDerivedStateFromError(error: Error) {
@@ -24,9 +25,10 @@ class Recovery extends Component<{ children: ReactNode }, { error: string }> {
     );
   }
 }
-connect();
 createRoot(document.getElementById("root")!).render(
   <Recovery>
-    <App />
+    <BootGate>
+      <App />
+    </BootGate>
   </Recovery>,
 );

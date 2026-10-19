@@ -1,1 +1,28 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' data:; font-src 'self' data:"><title>Pomelene Noteblock Editor</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' data:; font-src 'self' data:"
+    />
+    <title>Pomelene Noteblock Editor</title>
+    <link rel="stylesheet" href="/src/boot.css" />
+  </head>
+  <body>
+    <div id="root">
+      <main class="boot-splash" aria-label="Pomelene 启动界面" aria-busy="true">
+        <div class="boot-identity">
+          <span class="boot-mark" aria-hidden="true"
+            ><i></i><i></i><i></i
+          ></span>
+          <h1>Pomelene</h1>
+          <p class="boot-product">Noteblock Editor</p>
+        </div>
+        <p class="boot-status" role="status">正在打开工作区…</p>
+      </main>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

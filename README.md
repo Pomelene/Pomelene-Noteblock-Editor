@@ -1,14 +1,16 @@
-# Pomelene Noteblock Editor 0.5.3
+# Pomelene Noteblock Editor 0.5.4
 
 Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录是独立重构工程，旧版 `desktop` 保留。
 
 远端代码仓库：[Pomelene/Pomelene-Noteblock-Editor](https://github.com/Pomelene/Pomelene-Noteblock-Editor)（私有）。`main` 保存当前代码，版本标签保留已交付源码，`legacy/desktop-0.2` 保留旧工程提交历史。开发与本地文件保留规则见 [仓库与产物管理](docs/repository-and-retention.md)。
 
-当前开发版 **0.5.3** 进行视觉减法：暗色中性灰界面，去掉装饰渐变、厚阴影、重复徽标、零数量和常驻快捷键长提示，压缩音色标签与参数面板的视觉间隙。关键选中状态、音符颜色、锁定／静音／错误提示及键盘焦点保留。
+当前开发版 **0.5.4** 在视觉减法基础上加入 Quiet Aurora 主题：烟绿暗色、顶部低饱和薄荷／青蓝／淡紫光色、活动窗口细边、少量柔和不对称圆角与烟玻璃层次。音乐网格保持不透明、静止和精确，重点仍是音符与主要操作。动效仅用于正在播放的细状态线，并支持减少动态效果。
 
 播放范围显示“整曲／当前片段”，速度、拍号和播放位置用中文标识。和弦详细说明收进面板的“使用说明”，完整操作与快捷键仍可通过 F1／帮助菜单查看。0.5.2 的和弦生成与连续擦除功能继续保留。
 
-本轮验证见 [0.5.3 验证记录](docs/validation-0.5.3.md)；此前 [0.5.2 记录](docs/validation-0.5.2.md) 保留和弦算法、文件及音频测试依据。
+新增纯色开屏，工作区数据就绪后立即进入编辑器，无人为等待或模拟进度。初始化失败时显示原因并可重试连接，不需要退出应用。详细开屏美术留待后续设计。
+
+本轮验证见 [0.5.4 验证记录](docs/validation-0.5.4.md)；此前 [0.5.3 记录](docs/validation-0.5.3.md) 保留视觉减法依据，[0.5.2 记录](docs/validation-0.5.2.md) 保留和弦算法、文件及音频测试依据。
 
 工程仍使用带版本前缀和 CRC32 校验的 v2 格式；此前 NBS 控制事件与格式支持见 [工程 v2 与 NBS 控制事件](docs/project-v2.md) 与 [0.5.1 验证记录](docs/validation-0.5.1.md)。
 

@@ -1,0 +1,94 @@
+html,
+body {
+  background: #171d1b;
+}
+.boot-splash {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 34px;
+  margin: 0;
+  padding: 28px;
+  background: #171d1b;
+  color: #e2ebe3;
+  font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  text-align: center;
+}
+.boot-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.boot-mark {
+  display: grid;
+  grid-template-columns: repeat(2, 12px);
+  grid-template-rows: repeat(2, 12px);
+  gap: 4px;
+  margin-bottom: 24px;
+  color: #a9c7af;
+}
+.boot-mark i {
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+}
+.boot-mark i:last-child {
+  grid-column: 2;
+}
+.boot-splash h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: -0.8px;
+  line-height: 1.2;
+}
+.boot-product {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #adbbaf;
+  letter-spacing: 0.3px;
+}
+.boot-status {
+  margin: 0;
+  color: #a3b3a7;
+  font-size: 12px;
+}
+.boot-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 440px;
+}
+.boot-error p {
+  margin: 0;
+  font-size: 13px;
+  color: #e4c5ab;
+}
+.boot-error small {
+  color: #b9c4bc;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.boot-error button {
+  margin-top: 6px;
+  border: 1px solid #789582;
+  border-radius: 4px;
+  padding: 7px 18px;
+  background: #293e31;
+  color: #e9f2ec;
+  font: inherit;
+  cursor: pointer;
+}
+.boot-error button:focus-visible {
+  outline: 2px solid #c6dbc7;
+  outline-offset: 3px;
+}
+@media (forced-colors: active) {
+  .boot-mark i,
+  .boot-error button {
+    border-color: ButtonText;
+  }
+}

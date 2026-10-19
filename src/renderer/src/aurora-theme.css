@@ -1,0 +1,432 @@
+/* Quiet Aurora: atmosphere belongs to the chrome; musical data stays opaque. */
+:root {
+  --bg: #1b1e1d;
+  --panel: #252a28;
+  --panel-raised: #303833;
+  --line: #3a4540;
+  --text: #e0e8e2;
+  --muted: #a7b7ac;
+  --green: #a6cba9;
+  --accent: #e2bf85;
+  --aurora-cyan: #94c4c9;
+  --aurora-lilac: #b4abd4;
+  --chrome-solid: #232b28;
+  --chrome-glass: rgba(31, 40, 35, 0.94);
+}
+.studio {
+  background: var(--bg);
+}
+.menubar {
+  background: #1c2420;
+  border-bottom: 1px solid #344037;
+}
+.app-mark {
+  color: var(--green);
+}
+.version-label {
+  color: #a9b8ad;
+}
+.menu-trigger {
+  color: #c8d5cc;
+  border-radius: 4px;
+}
+.menu-trigger:hover:not(:disabled) {
+  background: #33433a;
+  border-color: transparent;
+}
+.transport-bar {
+  position: relative;
+  background:
+    radial-gradient(
+      ellipse at 5% -40%,
+      rgba(113, 177, 141, 0.23),
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse at 86% -80%,
+      rgba(129, 132, 188, 0.18),
+      transparent 57%
+    ),
+    #202825;
+  border-bottom: 1px solid #455449;
+}
+.project-name {
+  color: #ecf1eb;
+  font-weight: 600;
+}
+.project-badge small {
+  color: #a6b5ab;
+}
+.transport-switch {
+  border-color: #415249;
+  border-radius: 6px;
+}
+.transport-switch button {
+  background: #202a25;
+  color: #aebdb3;
+}
+.transport-switch button.on {
+  background: #476452;
+  color: #f0f6ed;
+}
+.transport-play,
+.transport-stop {
+  border-radius: 7px;
+  border-color: #44534a;
+}
+.transport-play {
+  position: relative;
+  background: #64836a;
+  color: #f3f7e9;
+  border-color: #89aa88;
+}
+.transport-play:hover:not(:disabled) {
+  background: #759779;
+  border-color: #bad0aa;
+}
+.transport-play.playing {
+  background: #566f5d;
+  border-color: #a8c6a4;
+  color: #f0d4a0;
+}
+.transport-play.playing::after {
+  content: "";
+  position: absolute;
+  height: 2px;
+  left: 10px;
+  right: 10px;
+  bottom: 4px;
+  border-radius: 2px;
+  background: #d7eab7;
+  opacity: 0.8;
+  animation: aurora-breathe 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+.transport-stop {
+  background: rgba(25, 34, 29, 0.6);
+  color: #c9d6cd;
+}
+.transport-loop.on {
+  background: #3c4937;
+  color: #e8cb96;
+}
+.transport-number input,
+.transport-meter select {
+  color: #e2ecdf;
+}
+.transport-number label,
+.transport-meter label {
+  color: #b2c3b6;
+}
+.transport-number small {
+  color: #a1b6a8;
+}
+.transport-position {
+  color: #dbe8dc;
+}
+.transport-position-label {
+  color: #a6bbae;
+}
+.transport-position-separator {
+  color: var(--aurora-cyan);
+}
+.file-shortcuts button {
+  color: #bbcabe;
+}
+.source-browser {
+  background: #222824;
+  border-right-color: #38433b;
+}
+.browser-title {
+  border-bottom-color: #334038;
+  color: #c6d5cb;
+}
+.browser-search {
+  background: #1c231f;
+  color: #9aafa0;
+  border-color: #323f36;
+  border-radius: 5px;
+}
+.browser-search input::placeholder {
+  color: #9aaea0;
+}
+.browser-filters button {
+  border-radius: 4px;
+  color: #adbbb1;
+}
+.browser-filters .selected {
+  background: #3b4b40 !important;
+  border-color: transparent !important;
+  color: #e6eee4 !important;
+}
+.library-label {
+  color: #a6b9ac;
+}
+.library-label small {
+  color: #94a99b;
+}
+.source-row {
+  border-radius: 3px 7px 7px 3px;
+}
+.source-row.active {
+  background: #303e33;
+  border-left-color: #acd3b4;
+}
+.source-row:hover:not(.active) {
+  background: #2d3830;
+}
+.source-copy b {
+  color: #d7e3d9;
+}
+.source-copy small {
+  color: #a0b3a5;
+}
+.browser-selected {
+  border-top-color: #3b493f;
+}
+.workspace {
+  background: #191f1c;
+}
+.workspace-frame {
+  border-color: #435147;
+  background: #232925;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px #080e0b55;
+}
+.workspace-frame.active {
+  border-color: #78957c;
+  box-shadow: 0 5px 16px #080e0b66;
+}
+.workspace-frame.active::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 5px;
+  right: 5px;
+  height: 1px;
+  background: linear-gradient(
+    100deg,
+    #a4c7a5 0%,
+    #8cbdc3 48%,
+    #aaa4cb 78%,
+    #91ac92 100%
+  );
+  pointer-events: none;
+}
+.workspace-frame.maximized {
+  border-radius: 0;
+}
+.studio-window-titlebar {
+  background: var(--chrome-solid);
+  border-bottom-color: #1a231e;
+  border-radius: 5px 5px 0 0;
+  color: #c6d5ca;
+}
+.workspace-frame.active .studio-window-titlebar {
+  background:
+    linear-gradient(
+      110deg,
+      rgba(99, 140, 108, 0.15),
+      rgba(118, 132, 158, 0.07) 72%
+    ),
+    var(--chrome-solid);
+}
+.workspace-frame.maximized .studio-window-titlebar {
+  border-radius: 0;
+}
+.studio-window-actions button {
+  border-radius: 4px;
+}
+.canvas-toolbar,
+.editor-tools {
+  background: #2c3430;
+  border-bottom-color: #1c251f;
+}
+.canvas-toolbar button,
+.editor-tools button {
+  color: #c2d0c6;
+  border-radius: 5px;
+}
+.selected {
+  color: #edf4e9 !important;
+  background: #435b49 !important;
+  border-color: #75927b !important;
+}
+.instrument-focus-panel {
+  background: #242d27;
+  border-bottom-color: #3c4c40;
+}
+.instrument-focus-header > label:first-of-type {
+  color: #d9e6da;
+}
+.instrument-focus-header > label:first-of-type select {
+  background: #1c2820;
+  border-color: #6a9276;
+  color: #e1f0df;
+}
+.instrument-choices .instrument-chip {
+  color: #b7c9bd;
+  border-radius: 7px 7px 1px 1px;
+}
+.instrument-choices .instrument-chip:hover {
+  background: #303e34;
+}
+.instrument-choices .instrument-chip.current {
+  background: #354b3b;
+  border-color: #b0cea8;
+  color: #edf5e8;
+  border-radius: 10px 10px 1px 1px;
+}
+.instrument-chip-count {
+  color: #b3c7b9;
+}
+.chord-generator {
+  background: #242c27;
+  border-left-color: #405044;
+}
+.chord-generator header strong {
+  color: #dceadb;
+}
+.chord-target {
+  color: #b2c5b8;
+}
+.chord-target b {
+  color: #dfc28d;
+}
+.chord-summary {
+  border-left: 2px solid #8eb99b;
+  padding-left: 9px;
+  margin-top: 7px;
+}
+.chord-summary strong {
+  color: #d6eacb;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+.chord-summary span {
+  color: #c7d9cf;
+}
+.chord-summary small {
+  color: #a6b9ad;
+}
+.chord-actions .chord-place {
+  background: #4c755b;
+  border-color: #7aa481;
+  color: #f2f7ee;
+  border-radius: 5px 9px 9px 5px;
+}
+.chord-actions .chord-place:hover:not(:disabled) {
+  background: #5c896b;
+}
+.chord-generator details {
+  border-color: #3c4e41;
+}
+.chord-degrees button[aria-pressed="true"] {
+  background: #3b5542;
+  border-color: #98bd9b;
+  color: #ebf4e5;
+  border-radius: 7px;
+}
+.studio-context-menu {
+  background: var(--chrome-solid);
+  border-color: #6b8271;
+  border-radius: 7px;
+  box-shadow: 0 5px 16px #080e0b66;
+}
+.studio-context-menu button {
+  border-radius: 4px;
+}
+.studio-dialog,
+.import-dialog {
+  background: #27332b;
+  border-color: #6b8371;
+  border-radius: 8px;
+}
+.studio-dialog header,
+.import-dialog header {
+  border-color: #425347;
+}
+.window-dock {
+  background: #222b25;
+  border-top-color: #465249;
+}
+.window-dock button {
+  color: #b3c5b8;
+}
+.window-dock button.active {
+  color: #e5efdf;
+}
+.canvas-footer,
+.statusbar {
+  background: #222924;
+  color: #a9bbae;
+  border-color: #3a473e;
+}
+.native-bar {
+  background: #222c26;
+  border-bottom-color: #485a4c;
+  color: #d7e7db;
+}
+.native-content {
+  background: #202722;
+}
+.instrument-focus-panel button:focus-visible,
+.instrument-focus-panel select:focus-visible,
+.chord-generator button:focus-visible,
+.chord-generator summary:focus-visible {
+  outline-color: #c9dcae;
+}
+@supports (backdrop-filter: blur(10px)) {
+  .studio-window-titlebar,
+  .studio-context-menu {
+    background-color: var(--chrome-glass);
+    backdrop-filter: blur(10px);
+  }
+  .workspace-frame.active .studio-window-titlebar {
+    background-color: var(--chrome-glass);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .studio button,
+  .studio input,
+  .studio select,
+  .studio-context-menu button {
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease,
+      color 120ms ease;
+  }
+}
+@keyframes aurora-breathe {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .transport-play.playing::after {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+@media (forced-colors: active) {
+  .workspace-frame.active::before {
+    background: Highlight;
+  }
+  .workspace-frame.active,
+  .instrument-choices .instrument-chip.current {
+    border-color: Highlight;
+  }
+  .studio-window-titlebar,
+  .studio-context-menu {
+    backdrop-filter: none;
+  }
+  .transport-play.playing::after {
+    background: Highlight;
+    animation: none;
+  }
+}

@@ -34,6 +34,7 @@ import { getNbsEventKind } from "../../shared/nbsEvents";
 import { resolveShortcut } from "./shortcuts";
 import { ShortcutHelp } from "./ShortcutHelp";
 import { TransportPosition } from "./TransportPosition";
+import { BootSplash } from "./BootSplash";
 import { layoutWindows } from "./windowGeometry";
 import type { FrameView } from "./WindowFrame";
 import {
@@ -695,14 +696,7 @@ export function App() {
     active,
     playlistView,
   ]);
-  if (!snapshot || !project)
-    return (
-      <div className="startup">
-        <Blocks size={36} />
-        <strong>Pomelene Noteblock Editor</strong>
-        <span>正在载入工作区…</span>
-      </div>
-    );
+  if (!snapshot || !project) return <BootSplash />;
   const selectedObj = getSource(project, source);
   const fileItems: MenuItem[] = [
     { label: "新建工程", shortcut: "Ctrl+N", action: () => void file("new") },
@@ -1030,7 +1024,7 @@ export function App() {
                     label: "关于 Pomelene Noteblock Editor",
                     action: () =>
                       setInfo({
-                        title: "Pomelene Noteblock Editor 0.5.3",
+                        title: "Pomelene Noteblock Editor 0.5.4",
                         body: (
                           <p>
                             Windows 桌面编辑器 · 新工作区
@@ -1061,7 +1055,7 @@ export function App() {
             ))}
             <span className="spacer" />
             <span className="version-label">
-              Pomelene <small>0.5.3</small>
+              Pomelene <small>0.5.4</small>
             </span>
           </div>
           <header className="transport-bar">

@@ -19,10 +19,25 @@ const emit = (s: Snapshot) => {
     for (const fn of listeners) fn();
   }
 };
-export function connect() {
-  const off = window.studio.onSnapshot(emit);
-  void window.studio.getSnapshot().then(emit);
-  return off;
+export function connect(onError?: (error: unknown) => void) {
+  let active = true,
+    off = () => {};
+  const receive = (snapshot: Snapshot) => {
+    if (active) emit(snapshot);
+  };
+  const fail = (error: unknown) => {
+    if (active) onError?.(error);
+  };
+  try {
+    off = window.studio.onSnapshot(receive);
+    void Promise.resolve(window.studio.getSnapshot()).then(receive, fail);
+  } catch (error) {
+    fail(error);
+  }
+  return () => {
+    active = false;
+    off();
+  };
 }
 export function useStudio() {
   return useSyncExternalStore(
