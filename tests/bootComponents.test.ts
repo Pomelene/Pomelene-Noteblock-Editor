@@ -81,6 +81,8 @@ describe.skipIf(!executablePath)("plain startup and readiness", () => {
       );
       await p.getByRole("button", { name: "重新尝试", exact: true }).click();
       await p.waitForFunction(() => (window as any).hostRequests === 2);
+      // The host request starts before React commits the cleared error state.
+      await p.getByRole("alert").waitFor({ state: "hidden" });
       expect(await p.getByRole("alert").count()).toBe(0);
       await p.evaluate(() => (window as any).resolveHost());
       await p.getByTestId("ready").waitFor();

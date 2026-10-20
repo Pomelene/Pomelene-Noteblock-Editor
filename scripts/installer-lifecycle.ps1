@@ -3,15 +3,47 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $testRoot = Join-Path $projectRoot 'test-results\installer\lifecycle'
+$testAreaPrefix = [IO.Path]::GetFullPath((Split-Path -Parent $testRoot)).TrimEnd('\') + '\'
 $productName = 'Pomelene Noteblock Editor'
-$installDir = Join-Path $testRoot "安装 验证\$productName"
+$installParent = Join-Path $testRoot '安装 验证'
+$installDir = Join-Path $installParent $productName
 $payload = Join-Path (Split-Path -Parent $Installer) 'win-unpacked'
 $reports = Join-Path $projectRoot 'test-results\installer'
 $checks = [Collections.Generic.List[string]]::new()
 function Assert-True([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
 function Record([string]$Name) { $checks.Add($Name); Write-Output "PASS $Name" }
+function Remove-DirectoryLink([string]$Path) {
+  if ([IO.Directory]::Exists($Path)) {
+    [IO.Directory]::Delete($Path, $false)
+  }
+}
 function Install-Entries {
-  @(Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*','HKCU:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -like '*Pomelene*' })
+  $entries = @(Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*','HKCU:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $null -ne $_ -and $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -like '*Pomelene*' })
+  if ($entries.Count -gt 0) { $entries }
+}
+function Remove-StaleTestShortcut([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+  $shell = New-Object -ComObject WScript.Shell
+  $target = $shell.CreateShortcut($Path).TargetPath
+  if ($target -and -not (Test-Path -LiteralPath $target) -and [IO.Path]::GetFullPath($target).StartsWith($testAreaPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    Remove-Item -LiteralPath $Path -Force
+  }
+}
+function Remove-StaleTestInstallEntries {
+  foreach ($entry in @(Install-Entries)) {
+    $uninstallProperty = $entry.PSObject.Properties['UninstallString']
+    if (-not $uninstallProperty) { continue }
+    $uninstallString = [string]$uninstallProperty.Value
+    $target = $null
+    if ($uninstallString -match '^\s*"([^"]+)"') {
+      $target = $matches[1]
+    } elseif ($uninstallString -match '^\s*(\S+)') {
+      $target = $matches[1]
+    }
+    if ($target -and -not (Test-Path -LiteralPath $target) -and [IO.Path]::GetFullPath($target).StartsWith($testAreaPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+      Remove-Item -LiteralPath $entry.PSPath -Force
+    }
+  }
 }
 function Invoke-Installer([string]$File, [string[]]$Arguments, [int]$Expected = 0) {
   $process = Start-Process -FilePath $File -ArgumentList $Arguments -WindowStyle Hidden -PassThru
@@ -20,13 +52,16 @@ function Invoke-Installer([string]$File, [string[]]$Arguments, [int]$Expected = 
 }
 function Same-Bytes([string]$First, [string]$Second) {
   $a = [IO.File]::ReadAllBytes($First); $b = [IO.File]::ReadAllBytes($Second)
-  return [Linq.Enumerable]::SequenceEqual[byte]($a, $b)
+  return [Convert]::ToBase64String($a) -eq [Convert]::ToBase64String($b)
 }
 Assert-True (Test-Path -LiteralPath $Installer -PathType Leaf) 'Installer missing'
+Remove-StaleTestInstallEntries
 Assert-True (@(Install-Entries).Count -eq 0) 'A real Pomelene installation exists; refusing to modify it'
 Assert-True (-not (Test-Path -LiteralPath $testRoot)) 'Lifecycle test folder already exists; inspect before reusing'
 $desktopLink = Join-Path ([Environment]::GetFolderPath('Desktop')) "$productName.lnk"
 $startLink = Join-Path ([Environment]::GetFolderPath('Programs')) "$productName.lnk"
+Remove-StaleTestShortcut $desktopLink
+Remove-StaleTestShortcut $startLink
 Assert-True (-not (Test-Path -LiteralPath $desktopLink)) 'Existing desktop shortcut must not be overwritten'
 Assert-True (-not (Test-Path -LiteralPath $startLink)) 'Existing start shortcut must not be overwritten'
 New-Item -ItemType Directory -Path $testRoot | Out-Null
@@ -39,18 +74,21 @@ New-Item -ItemType Directory -Path $invalid -Force | Out-Null
 Invoke-Installer $Installer @('/S','/currentuser',"/D=$invalid") 12
 Assert-True (Test-Path -LiteralPath (Join-Path $invalid 'keep.txt')) 'Unsafe target was changed'
 Assert-True (@(Install-Entries).Count -eq 0) 'Rejected install registered itself'
-Invoke-Installer $Installer @('/S','/currentuser',"/D=$testRoot") 12
-Record 'nonempty unrelated directory and non-product target are rejected before installation'
+Record 'nonempty unrelated product directory is rejected before installation'
 $junctionTarget = Join-Path $testRoot 'junction-target'
 $junction = Join-Path $testRoot 'linked'
 New-Item -ItemType Directory -Path $junctionTarget | Out-Null
 New-Item -ItemType Junction -Path $junction -Target $junctionTarget | Out-Null
 try { Invoke-Installer $Installer @('/S','/currentuser',"/D=$junction\$productName") 12 }
-finally { Remove-Item -LiteralPath $junction -Force }
+finally { Remove-DirectoryLink $junction }
 Record 'destination directory junction is rejected'
-Invoke-Installer $Installer @('/S','/currentuser',"/D=$installDir")
+New-Item -ItemType Directory -Path $installParent | Out-Null
+$parentUserFile = Join-Path $installParent '相邻资料.txt'
+[IO.File]::WriteAllText($parentUserFile,'parent directory content must survive')
+Invoke-Installer $Installer @('/S','/currentuser',"/D=$installParent")
 $exe = Join-Path $installDir "$productName.exe"
 Assert-True (Test-Path -LiteralPath $exe) 'Application was not installed'
+Assert-True ([IO.File]::ReadAllText($parentUserFile) -eq 'parent directory content must survive') 'Installer changed the selected parent directory'
 $owned = Get-Content -LiteralPath (Join-Path $reports 'owned-files.json') -Raw | ConvertFrom-Json
 foreach ($relative in $owned) { Assert-True (Same-Bytes (Join-Path $payload $relative) (Join-Path $installDir $relative)) "Installed bytes differ: $relative" }
 Record "offline installation in Unicode/space path deploys $($owned.Count) expected files byte-for-byte"
@@ -83,7 +121,7 @@ try {
   Assert-True ([IO.File]::ReadAllText((Join-Path $externalResource 'app.asar')) -eq 'external data must not be deleted') 'Uninstaller followed an internal junction'
   Assert-True (Test-Path -LiteralPath $exe) 'Junction rejection removed installed executable'
 } finally {
-  Remove-Item -LiteralPath $realResources -Force
+  Remove-DirectoryLink $realResources
   Move-Item -LiteralPath $savedResources -Destination $realResources
 }
 Record 'uninstaller rejects internal directory junctions without changing external or installed files'
@@ -135,8 +173,8 @@ try {
   Assert-True ([IO.File]::ReadAllText($userFile) -eq 'user project in installation directory') 'Uninstall deleted project'
   Assert-True ([IO.File]::ReadAllText($nestedUserFile) -eq 'user resource must survive') 'Uninstall deleted user resource'
   Assert-True (Test-Path -LiteralPath $appDataMarker) 'Uninstall deleted app data'
-  Assert-True ([Linq.Enumerable]::SequenceEqual[byte]($outsideBytes,[IO.File]::ReadAllBytes($outside))) 'External song changed'
+  Assert-True ([Convert]::ToBase64String($outsideBytes) -eq [Convert]::ToBase64String([IO.File]::ReadAllBytes($outside))) 'External song changed'
   Record 'uninstall retains external song, install-directory project/resource and AppData'
 } finally { Remove-Item -LiteralPath $appDataMarker -Force -ErrorAction SilentlyContinue }
 $signature = Get-AuthenticodeSignature -LiteralPath $Installer
-@{ installer=$Installer; signature=$signature.Status.ToString(); checks=$checks.ToArray(); installPath=$installDir; ownedFiles=$owned.Count; retainedUserFiles=@($outside,$userFile,$nestedUserFile); noHashChecks=$true } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $reports 'lifecycle-results.json')
+@{ installer=$Installer; signature=$signature.Status.ToString(); checks=$checks.ToArray(); installPath=$installDir; ownedFiles=$owned.Count; retainedUserFiles=@($outside,$parentUserFile,$userFile,$nestedUserFile); noHashChecks=$true } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $reports 'lifecycle-results.json')

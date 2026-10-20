@@ -45,15 +45,32 @@
 !macroend
 
 !ifndef BUILD_UNINSTALLER
+Function PomelenePrepareDirectory
+  ; The directory page selects a parent location. Keep an already explicit
+  ; product folder, otherwise create the product folder beneath that parent.
+  ; NSIS GetFullPathName requires the target to exist: a fresh product folder
+  ; otherwise becomes an empty string. Win32 normalizes nonexistent paths too.
+  System::Call 'kernel32::GetFullPathNameW(w "$INSTDIR", i ${NSIS_MAX_STRLEN}, w .r0, p 0)i.r1'
+  ${If} $1 == 0
+  ${OrIf} $1 >= ${NSIS_MAX_STRLEN}
+    StrCpy $INSTDIR ""
+    Return
+  ${EndIf}
+  StrCpy $INSTDIR $0
+  ${GetFileName} "$INSTDIR" $0
+  ${If} $0 != "${APP_FILENAME}"
+    StrCpy $INSTDIR "$INSTDIR\${APP_FILENAME}"
+  ${EndIf}
+FunctionEnd
+
 Function PomeleneValidateDirectory
-  ; Require a dedicated, absolute local product directory, including /D= installs.
+  ; Require an absolute local product directory, including /D= installs.
   StrCpy $0 $INSTDIR 1 1
   StrCpy $1 $INSTDIR 1 2
   ${If} $0 != ":"
   ${OrIf} $1 != "\"
     Goto unsafe_directory
   ${EndIf}
-  GetFullPathName $INSTDIR "$INSTDIR"
   ${GetFileName} "$INSTDIR" $0
   ${If} $0 != "${APP_FILENAME}"
     Goto unsafe_directory
@@ -100,15 +117,21 @@ Function PomeleneValidateDirectory
     ${EndIf}
   unsafe_directory:
     SetErrorLevel 12
-    MessageBox MB_OK|MB_ICONSTOP "请选择独立的 Pomelene Noteblock Editor 文件夹；不能使用已有其他文件的目录或目录联接。$\r$\nChoose a dedicated empty product folder, without directory links." /SD IDOK
+    MessageBox MB_OK|MB_ICONSTOP "无法在所选位置安全安装：Pomelene Noteblock Editor 文件夹中已有其他文件，或安装路径包含目录联接/符号链接。$\r$\nUnable to install safely: the product folder is not empty or the destination path contains a directory link." /SD IDOK
     Quit
 FunctionEnd
 
 !macro customInit
-  Call PomeleneValidateDirectory
+  ; Interactive installs validate after the user confirms the directory page.
+  ; Silent installs skip pages, so validate their /D target here instead.
+  ${If} ${Silent}
+    Call PomelenePrepareDirectory
+    Call PomeleneValidateDirectory
+  ${EndIf}
 !macroend
 
 Function PomeleneValidateSelectedDirectory
+  Call PomelenePrepareDirectory
   Call PomeleneValidateDirectory
   Abort ; A validation-only custom page: continue to the standard install page.
 FunctionEnd

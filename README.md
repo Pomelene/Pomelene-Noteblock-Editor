@@ -4,6 +4,8 @@ Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录�
 
 Windows 安装版使用离线 NSIS 向导，包含卸载程序，默认当前用户安装。安装目标、运行中进程、目录联接和文件占用均有保护；卸载保留额外用户文件与 AppData。操作过程和验证边界见 [Windows 安装与卸载说明](docs/windows-installer.md)。
 
+Windows x64 安装包与独立源码归档见 [GitHub Releases](https://github.com/Pomelene/Pomelene-Noteblock-Editor/releases/latest)。0.5.7 的功能、安装目录修复与验证范围见 [发布说明](docs/release-0.5.7.md)。
+
 远端代码仓库：[Pomelene/Pomelene-Noteblock-Editor](https://github.com/Pomelene/Pomelene-Noteblock-Editor)（私有）。`main` 保存当前代码，版本标签保留已交付源码，`legacy/desktop-0.2` 保留旧工程提交历史。开发与本地文件保留规则见 [仓库与产物管理](docs/repository-and-retention.md)。
 
 当前开发版 **0.5.7** 将开始页升级为全背景实时声纹：线性插值推动尺度与模式变化，正弦缓动和振荡驱动三组配色、旋转及扭曲。原创 WebGL 干涉场叠加细粒子，兼容 Canvas / CSS 回退。保留打开歌曲、打开工程与新建入口，支持暂停和减少动态效果，进入编辑器后释放。
