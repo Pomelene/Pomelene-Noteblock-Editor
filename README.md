@@ -1,115 +1,65 @@
-# Pomelene Noteblock Editor 0.5.7
+# Pomelene Noteblock Editor
 
-Windows first 的 Electron / React / TypeScript 音符盒编辑器。本目录是独立重构工程，旧版 `desktop` 保留。
+**作者：柚烯Pomelene** · [GitHub 主页](https://github.com/Pomelene)
 
-Windows 安装版使用离线 NSIS 向导，包含卸载程序，默认当前用户安装。安装目标、运行中进程、目录联接和文件占用均有保护；卸载保留额外用户文件与 AppData。操作过程和验证边界见 [Windows 安装与卸载说明](docs/windows-installer.md)。
+问题反馈与功能建议：[提交 Issue](https://github.com/Pomelene/Pomelene-Noteblock-Editor/issues)。反馈问题时，请尽量附上软件版本、操作步骤和截图。
 
-Windows x64 安装包与独立源码归档见 [GitHub Releases](https://github.com/Pomelene/Pomelene-Noteblock-Editor/releases/latest)。0.5.7 的功能、安装目录修复与验证范围见 [发布说明](docs/release-0.5.7.md)。
+一款面向 Minecraft 音符盒音乐的桌面编辑器，让 `.nbs` 的编辑、乐段复用和整曲编排更方便。
 
-远端代码仓库：[Pomelene/Pomelene-Noteblock-Editor](https://github.com/Pomelene/Pomelene-Noteblock-Editor)（私有）。`main` 保存当前代码，版本标签保留已交付源码，`legacy/desktop-0.2` 保留旧工程提交历史。开发与本地文件保留规则见 [仓库与产物管理](docs/repository-and-retention.md)。
+## 下载与安装
 
-当前开发版 **0.5.7** 将开始页升级为全背景实时声纹：线性插值推动尺度与模式变化，正弦缓动和振荡驱动三组配色、旋转及扭曲。原创 WebGL 干涉场叠加细粒子，兼容 Canvas / CSS 回退。保留打开歌曲、打开工程与新建入口，支持暂停和减少动态效果，进入编辑器后释放。
+当前提供 **Windows x64 安装包**，内含运行环境，无需安装 Node.js 或其他开发工具。
 
-常用文件、保存、导出、撤销重做集中在左上菜单旁；编辑器吸附、缩放、长度和原生窗口操作也向左排列。保留 0.5.5 的透光玻璃材质。
+1. 打开 **[最新版本下载页](https://github.com/Pomelene/Pomelene-Noteblock-Editor/releases/latest)**。
+2. 在页面底部的 **Assets（附件）** 中，下载名称以 **`Setup-x64.exe`** 结尾的安装包，例如 `PomeleneNoteblockEditor-0.5.7-Setup-x64.exe`。
+3. 双击安装包，按向导选择安装位置。选择父目录即可，安装器会自动在其下创建 `Pomelene Noteblock Editor` 文件夹。
+4. 安装完成后，通过桌面或开始菜单中的 **Pomelene Noteblock Editor** 快捷方式启动。
 
-播放范围显示“整曲／当前片段”，速度、拍号和播放位置用中文标识。和弦详细说明收进面板的“使用说明”，完整操作与快捷键仍可通过 F1／帮助菜单查看。0.5.2 的和弦生成与连续擦除功能继续保留。
+`source.zip` 和 GitHub 自动提供的 `Source code` 是源码归档，供开发使用；正常安装请选择上面的 `.exe` 文件。
 
-初始化等待屏仍有失败重试；数据就绪后进入开始页，用户完成新建或打开后进入编辑器。取消和错误保留原工程，NBS 导入预览仍可使用。动画思路与来源见 [程序化开屏研究](docs/start-art-research.md)。
+当前安装包尚未进行发行者代码签名，Windows 可能显示“未知发布者”。无需关闭杀毒软件或修改系统安全策略。详细过程见 [安装与卸载说明](docs/windows-installer.md)。
 
-本轮范围与验证见 [0.5.7 记录](docs/validation-0.5.7.md)；此前 [0.5.3 记录](docs/validation-0.5.3.md) 保留视觉减法依据，[0.5.2 记录](docs/validation-0.5.2.md) 保留和弦算法、文件及音频测试依据。
+### 第一次使用
 
-工程仍使用带版本前缀和 CRC32 校验的 v2 格式；此前 NBS 控制事件与格式支持见 [工程 v2 与 NBS 控制事件](docs/project-v2.md) 与 [0.5.1 验证记录](docs/validation-0.5.1.md)。
+打开软件后，可以选择：
 
-采用源对象、编排引用、编辑视图三层模型。Pattern 是可编辑乐段，片段采样是只读的可复用音符快照，均可反复编排和打开多个内部或原生窗口。历史音频文件与乐器单音在“音频 / 乐器资源”中单独管理。主进程维护工程、历史及原生文件访问，音频通过 AudioContext 时钟调度并跨窗口协调。
+- **打开 .nbs 歌曲**：导入已有音乐，预览后开始编辑；可选用“智能 Pattern 整理（Beta）”。
+- **打开工程文件 .nbproject**：继续编辑已保存的工程。
+- **新建工程**：从空白开始制作。
 
-## 已实现
+编辑过程中使用 `.nbproject` 保存完整工程；需要交给支持 NBS 的播放器或 Minecraft 工具时，再导出 `.nbs`。
 
-- 大型 NBS 智能整理：最多分析 65,536 条图层／音色通道，输出预算与工程格式对齐（256 轨道、1,024 Pattern、10,000 引用）；复杂歌曲合并相邻乐句或按音色／音区共享轨道，原始图层与全部音符保留。整理摘要支持百万音符。
-- 编排行高 24–128px、NBS 图层行高 20–96px、钢琴行高 12–48px；编辑区内 Ctrl+滚轮以鼠标时间位置为中心缩放，普通滚轮继续滚动。
-- “添加 → 自定义音色与映射…”管理缺失或自定义音色；支持手选替换、建议分配、试听、重置和撤销，绑定随工程保存，播放与 NBS 导出统一补偿原调音。建议参考本地 notebot 的名称、音域与节奏分析，不会自动替换原音色。
+### 卸载
 
-- Playlist 自由编排，独立引用长度/偏移、移动、框选、剪贴板、独立副本、轨道静音/独奏/锁定。
-- 片段拖长补空白、缩短裁播放窗口，保留源数据；不会自动循环或变速。
-- P 绘制、B 连续笔刷、E 选择、D 连续删除，编排另有 T 静音、S 滑移；快速拖动补齐经过的位置，回扫不重复，一个手势一次撤销。
-- 共用的拍值吸附选择器：关闭、随缩放变化的自动网格、直拍、三连音、小节；Alt 临时自由定位，拖动保留原有离格偏移。
-- Pattern / 编排选区保存为只读片段采样、导入外部 NBS 片段、只读预览及预听、根据采样创建独立 Pattern；片段引用同样可补静音和裁剪。
-- 钢琴卷帘、NBS 图层视图、音高/音色/力度/声像/微调、力度拖动、基础和弦放置。
-- 16 个实际原版采样，真实 PCM 波形，采样预听设置，自定义乐器调音与路径管理。
-- 多编辑实例、八方向缩放、最大化/还原、最小化、原生弹出；列表右键菜单与画布右键擦除。
-- 整曲 Playlist 也作为子窗口，可与 Pattern 平铺、层叠；所有编辑器可弹出成系统窗口并停靠回主工作区，共享工程和撤销。
-- 按上下文分派快捷键，F1 搜索操作；支持选区反选/取消、音符八度移动、网格切换、定位、缩放预设与窗口切换。输入框保留文字编辑。
-- Pattern 显眼的音色选择栏显示各音色音符数量；聚焦当前音色时，其余音色音符和力度条半透明，支持显示全部。
-- 独立播放/暂停和终止，暂停精确保留位置，一次终止归零；SONG / Pattern / Sample 范围。
-- 原生文件对话框，原子写入、失败保留原文件、未保存保护、完整工程保存/重开。
-- NBS v0–6 读取、v5 导出；兼容旧文件零填充、少报图层及扩展原版音色，异常力度明确提示规范化。v6 铜号按具名自定义资源保留，音频缺失时明确提示。
-- NBS 变速与停止发声控制参与整曲播放、跳转和循环；视觉事件保留并可查看。控制定义不作为缺失采样。工程保存为带版本前缀、长度及 CRC32 校验的 v2 文件，旧工程不再导入。
-- 播放位置固定数字栏宽，TICK 始终三位；PAT 目标跟随编排中的来源选择和活动编辑窗口，SONG 不受来源选择影响。
-- NBS 导入预览和可选的“智能 Pattern 整理（Beta）”：按声部分组、识别完全相同的乐句并复用；保留原始布局备份，支持恢复和撤销。
+通过 Windows 的“已安装的应用”卸载，或运行安装目录中的 `Uninstall Pomelene Noteblock Editor.exe`。卸载会保留额外用户文件与 AppData 设置。
 
-打开 NBS 后可取消勾选，沿用单 Pattern 原始布局。智能整理不量化、移调或删除音符，也不把近似旋律当成同一个 Pattern。乐句候选支持 1、2、3、4、6、8 小节，使用乐曲拍号；这是一版可继续改进的启发式算法，不承诺理解主歌、副歌或所有声部。
+## 基础功能
 
-“帮助 → 智能整理报告…”查看结果；“编辑 → 恢复原始导入布局…”会用导入时的音符和编排替换当前布局，请先保存需要保留的修改。恢复可撤销。完整工程保存报告和备份；NBS 格式本身不保存 Pattern，重新打开导出的 NBS 仍需重新选择整理方式。
+| 功能 | 可以做什么 |
+| --- | --- |
+| 音符编辑 | 在钢琴卷帘或 NBS 图层视图中放置、删除、框选、拖动音符，调整音高、音色、力度等参数。 |
+| 乐段与整曲编排 | 将 Pattern（可编辑乐段）反复放入整曲，移动、复制和调整片段长度，管理轨道静音、独奏与锁定。 |
+| 片段复用 | 将已有音符保存为只读片段采样并重复使用，也可以根据片段创建可编辑的 Pattern。 |
+| 速度与播放 | 设置 BPM 和拍号，切换整曲或当前片段播放；暂停保留位置，终止回到起点。 |
+| 音色管理 | 试听原版音色，管理自定义乐器资源，为缺失或不支持的音色选择替代映射。 |
+| 文件读写 | 打开 `.nbs`，保存和重开 `.nbproject` 工程，并导出 `.nbs`。 |
 
-保存选区会截取所选引用可见窗口内的触发事件，保留中间留白和末尾补白；不将音频识别成音符。片段音符和图层只读，音色仍引用当前工程的乐器资源；导入片段保留 tick 并跟随工程速度。全局控制事件通过整曲 NBS 打开，当前不直接导入为片段。工程仅支持新的 v2 容器，不读取此前的 JSON 工程。
+## 特色功能
 
-详细操作见 [使用说明](resources/使用说明.txt)。本次正式命名发布见 [0.5.0 发布记录](docs/pomelene-noteblock-editor-0.5.0.md)，功能验收见 [此前开发验收报告](docs/validation-0.7.0.md)，历史见 [0.6.1 报告](docs/validation-0.6.1.md)；算法依据见 [制作经验与算法依据](docs/smart-pattern-research.md)。
+- **智能 Pattern 整理（Beta）**：导入 NBS 时按声部整理乐句，识别完全相同的片段以供复用；保留原始导入布局，便于恢复和对照。
+- **和弦快捷生成**：选定时间位置后，通过和弦面板放置一组对应音符。
+- **连续放置与右键擦除**：按住拖动即可连续放置或删除；一次手势对应一次撤销。
+- **自由组合的编辑窗口**：整曲编排与 Pattern 编辑均支持缩放、最大化、弹出为独立系统窗口和重新停靠。
+- **音色聚焦**：选中一个音色后，其他音色的音符与力度条半透明显示，方便处理多声部内容。
+- **可调编辑密度**：调整行高，使用 Ctrl + 鼠标滚轮缩放时间尺度，配合直拍、三连音和小节吸附。
+- **按编辑上下文工作的快捷键**：支持选区、剪贴板、定位和窗口操作，按 F1 可搜索操作。
+- **实时声纹开始页**：全背景程序化图样随时间变化，支持暂停动画与减少动态效果。
 
-## 本地开发
+### 文件兼容与开发进度
 
-后续开发遵循 [桌面运行环境可替换性](docs/desktop-runtime-portability.md)：保持音乐与文件格式核心独立、宿主能力集中适配，为未来评估更轻量方案保留迁移空间。当前继续使用 Electron 推进核心功能。
+- 支持读取 **NBS v0–6**，导出 **NBS v5**。v6 新铜号需要对应音频资源。
+- 工程使用带版本标签的 **v2 `.nbproject`** 格式，不读取早期 JSON 工程。
+- 智能整理仍在持续改进，复杂声部与跨小节主题可能需要手动调整。
+- MIDI 智能转换、鼓点素材库和半自动丰富听感目前尚未实现。
 
-新增输入调研见 [文件格式与非发声结构参考表](docs/input-formats-and-control-events.md)，包含格式结构、控制／视觉事件编码、已验证来源和当前语义缺口；它是设计参考，不代表这些新增能力已经实现。
-
-需要 Node.js 22+ 与 pnpm 11.25。先在独立检出目录中执行 `pnpm install --frozen-lockfile`。
-
-```powershell
-pnpm dev
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm smoke
-pnpm smoke:smart
-pnpm smoke:phrases
-pnpm smoke:workspace
-pnpm pack:win
-pnpm smoke:packaged
-```
-
-此开发机复用了旧版 node_modules 的目录联接。源码归档不包含此联接、node_modules 或生成的 out；新机器正常安装依赖即可。
-已在 pnpm-workspace.yaml 中允许 Electron / esbuild 安装脚本，并关闭命令运行前隐式重新安装，依据 pnpm 11 官方设置（https://pnpm.io/blog/releases/11.0）。也可直接执行已安装工具：
-
-```powershell
-node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
-node node_modules/vitest/vitest.mjs run
-node node_modules/electron-vite/bin/electron-vite.js build
-node node_modules/electron-builder/cli.js --win nsis --x64
-node scripts/smoke.cjs
-node scripts/smart-import-smoke.cjs
-node scripts/phrase-interaction-smoke.cjs
-node scripts/workspace-shortcuts-smoke.cjs
-node scripts/analyze-nbs.cjs 'D:/path/to/Songs'
-```
-
-真实 Electron 测试只替换系统对话框的路径选择；文件 IPC、序列化、磁盘读写、采样解码、鼠标和键盘操作仍使用实际实现。`NBE_EXE` 可指定解压后的发布 EXE。
-
-安装版验收使用 `scripts/installer-lifecycle.ps1 -Installer <Setup.exe>`，会创建当前用户的临时测试安装和快捷方式，完成后卸载；若已经存在真实安装或同名快捷方式则拒绝执行。不要在未检查脚本和测试目录时直接用于已有安装。开发构建仍可用 `pnpm pack:dir` 生成免安装目录。
-
-## 工程结构
-
-- `src/shared`：数据契约、事务/历史、NBS 适配、音频事件计划。
-- `src/shared/smartPattern`：独立的分组、特征、分段和精确复用算法，参数档案与算法版本；不依赖 UI 或网络服务。
-- `src/main`：安全 IPC、原生窗口、文件保存、音频 ZIP。
-- `src/preload`：受限桥接与工程代际防护。
-- `src/renderer/src`：工作区、编辑器、交互、窗口/菜单、音频时钟。
-- `src/legacy`：沿用旧版已验证的底层 NBS 格式编解码，未沿用旧 UI/状态架构。
-- `tests` / `scripts/smoke.cjs`：单元、窗口组件、实际 Electron 回归。
-- `docs/superpowers`：设计与实施方案。
-
-## 参考资料与资源
-
-交互理解依据 FL 官方 Playlist、Piano roll、Channel Rack、窗口说明和 NBS 官方格式/教程，见 [参考说明](docs/reference-notes.md)。没有声称完成 FL 原生界面代码的反编译。
-内置采样来自本机 Minecraft Note Block Studio 的实际 OGG，来源及哈希记录于 `docs/sample-sources.json`。未包含 FL 二进制、界面图片或其商业资源。图标采用 Lucide；应用图标为本项目绘制。
-
-## 当前边界
-
-本版是可运行的重构核心，472 项需求总表仍是持续开发清单。智能整理仍可能拆出较多 Pattern；缺少可靠名称的交织旋律、弱起和跨小节主题需要后续改进。超过资源预算时保留原布局，并在预览中说明原因。MIDI 智能转换、鼓点素材库、半自动丰富听感未实现。NBS v6 的新铜号需对应音频资源，导出仍为 v5。直接音频 Clip 无法无损表达成 NBS，导出会提示。复杂拍号、细分时间及工程播放参数受到 NBS 格式约束，完整工程保留所有内部数据。
+更多内容：[使用说明](resources/使用说明.txt) · [0.5.7 发布说明](docs/release-0.5.7.md) · [开发指南](docs/development.md) · [参考资料](docs/reference-notes.md)
