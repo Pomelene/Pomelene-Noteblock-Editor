@@ -131,6 +131,10 @@ export function toNbs(input: Project, version: 5 | 6 = 5): {
       .filter((i) => i.id >= 16)
       .sort((a, b) => a.id - b.id);
   const customIds = new Map(custom.map((i, index) => [i.id, index + 16]));
+  const samples = new Map(project.samples.map((s) => [s.id, s]));
+  const instruments = new Map(project.instruments.map((i) => [i.id, i]));
+  const patterns = new Map(project.patterns.map((p) => [p.id, p]));
+  const phrases = new Map((project.phrases ?? []).map((p) => [p.id, p]));
   if (
     project.samples.some(
       (s) => s.volume !== 100 || s.panning !== 100 || s.rootKey !== 66,
@@ -142,22 +146,23 @@ export function toNbs(input: Project, version: 5 | 6 = 5): {
   // Protocol definitions retain their slots without ordinary sample resources.
   const definitions = structuredClone(project.nbs?.customInstruments ?? []);
   for (const i of custom) {
-    const sample = project.samples.find((s) => s.id === i.sampleId)!;
+    const sample = samples.get(i.sampleId)!;
+    const copper = copperForSample(sample);
     const index = i.id - 16;
     const old = definitions[index];
     const destination = old ? index : definitions.length;
     customIds.set(i.id, 16 + destination);
     definitions[destination] = {
-      ...(copperForSample(sample) ? {vanillaId:copperForSample(sample)!.id} : {}),
+      ...(copper ? { vanillaId: copper.id } : {}),
       name: i.name,
-      file: copperForSample(sample) ? `minecraft/${copperForSample(sample)!.file}.ogg` : sample.originalPath ?? old?.file ?? `${sample.name}.wav`,
+      file: copper ? `minecraft/${copper.file}.ogg` : sample.originalPath ?? old?.file ?? `${sample.name}.wav`,
       key: i.key,
       pressKey: Number(i.pressKey),
     };
   }
   if (
     custom.some(
-      (i) => project.samples.find((s) => s.id === i.sampleId)?.dataUrl,
+      (i) => samples.get(i.sampleId)?.dataUrl,
     )
   )
     warnings.push(
@@ -208,6 +213,7 @@ export function toNbs(input: Project, version: 5 | 6 = 5): {
   const solo = project.tracks.some((t) => t.solo);
   const lanes = new Map<string, number>(),
     claimedOriginal = new Set<number>();
+  const sourceLayers = new Map<Pattern, { map: number[]; solo: boolean }>();
   if (
     [...project.patterns, ...(project.phrases ?? [])].some((p) =>
       p.layers.some((l) => l.sourceIndex !== undefined),
@@ -221,43 +227,45 @@ export function toNbs(input: Project, version: 5 | 6 = 5): {
       omittedSamples = true;
       continue;
     }
-    const source = (
-        c.kind === "phrase" ? (project.phrases ?? []) : project.patterns
-      ).find((p) => p.id === c.sourceId)!,
-      layerSolo = source.layers.some((l) => l.solo);
-    // Repeated references share lane settings. The codec still allocates
-    // collision lanes when references overlap at the same tick.
-    const layerMap = source.layers.map((l, index) => {
-      const definition = {
-          name: l.name,
-          volume: Math.round(l.volume),
-          panning: Math.round(l.panning),
-          locked: Number(l.locked),
-        },
-        key = JSON.stringify([
-          l.sourceIndex === undefined
-            ? [source.id, index]
-            : ["nbs", l.sourceIndex],
-          definition,
-        ]);
-      const known = lanes.get(key);
-      if (known !== undefined) return known;
-      let destination = meta.layers.length;
-      if (l.sourceIndex !== undefined && !claimedOriginal.has(l.sourceIndex)) {
-        destination = l.sourceIndex;
-        claimedOriginal.add(destination);
-        while (meta.layers.length <= destination)
-          meta.layers.push({
-            name: `图层 ${meta.layers.length + 1}`,
-            volume: 100,
-            panning: 100,
-            locked: 0,
-          });
-        meta.layers[destination] = definition;
-      } else meta.layers.push(definition);
-      lanes.set(key, destination);
-      return destination;
-    });
+    const source = (c.kind === "phrase" ? phrases : patterns).get(c.sourceId)!;
+    let sourceLayout = sourceLayers.get(source);
+    if (!sourceLayout) {
+      // Repeated references share lane settings. The codec still allocates
+      // collision lanes when references overlap at the same tick.
+      const map = source.layers.map((l, index) => {
+        const definition = {
+            name: l.name,
+            volume: Math.round(l.volume),
+            panning: Math.round(l.panning),
+            locked: Number(l.locked),
+          },
+          key = JSON.stringify([
+            l.sourceIndex === undefined
+              ? [source.id, index]
+              : ["nbs", l.sourceIndex],
+            definition,
+          ]);
+        const known = lanes.get(key);
+        if (known !== undefined) return known;
+        let destination = meta.layers.length;
+        if (l.sourceIndex !== undefined && !claimedOriginal.has(l.sourceIndex)) {
+          destination = l.sourceIndex;
+          claimedOriginal.add(destination);
+          while (meta.layers.length <= destination)
+            meta.layers.push({
+              name: `图层 ${meta.layers.length + 1}`,
+              volume: 100,
+              panning: 100,
+              locked: 0,
+            });
+          meta.layers[destination] = definition;
+        } else meta.layers.push(definition);
+        lanes.set(key, destination);
+        return destination;
+      });
+      sourceLayout = { map, solo: source.layers.some((l) => l.solo) };
+      sourceLayers.set(source, sourceLayout);
+    }
     fractional ||=
       !Number.isInteger(c.tick) ||
       !Number.isInteger(c.length) ||
@@ -269,7 +277,7 @@ export function toNbs(input: Project, version: 5 | 6 = 5): {
       const l = source.layers[n.layer];
       if (
         l.muted ||
-        (layerSolo && !l.solo) ||
+        (sourceLayout.solo && !l.solo) ||
         n.tick < c.offset ||
         n.tick >= c.offset + c.length ||
         n.tick >= source.length
@@ -278,15 +286,11 @@ export function toNbs(input: Project, version: 5 | 6 = 5): {
       fractional ||= !Number.isInteger(n.tick - c.offset);
       const relative = Math.round(n.tick - c.offset);
       if (relative >= length) continue;
-      const instrument = project.instruments.find(
-        (i) => i.id === n.instrument,
-      )!;
+      const instrument = instruments.get(n.instrument)!;
       const target =
         instrument.mappingTargetId === undefined
           ? instrument
-          : project.instruments.find(
-              (i) => i.id === instrument.mappingTargetId,
-            )!;
+          : instruments.get(instrument.mappingTargetId)!;
       const effectivePitch = n.pitch + instrument.key - target.key;
       const pitch =
         instrument.mappingTargetId === undefined
@@ -306,7 +310,7 @@ export function toNbs(input: Project, version: 5 | 6 = 5): {
         tick: relative,
         pitch,
         finePitch,
-        layer: layerMap[n.layer],
+        layer: sourceLayout.map[n.layer],
         instrument: customIds.get(target.id) ?? target.id,
       });
     }

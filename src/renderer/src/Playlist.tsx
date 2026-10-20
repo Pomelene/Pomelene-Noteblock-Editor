@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Pencil,
   Paintbrush,
@@ -19,6 +19,7 @@ import { ticksPerBar, type Project, type Clip } from "../../shared/model";
 import type { Run, ShowMenu, RequestText, Source } from "./ui";
 import { resizeClip } from "./editing";
 import { SnapPicker } from "./SnapPicker";
+import { PlaybackCursor } from "./PlaybackCursor";
 import {
   snapPosition,
   snapUnit,
@@ -131,7 +132,12 @@ export function Playlist({
     unit = snapUnit(snap, zoom, bar);
   const atTick = (tick: number, alt = false) =>
     snapPosition(tick, snap, zoom, bar, alt);
-  const selected = project.clips.filter((c) => ids.includes(c.id)),
+  const selectedIds = useMemo(() => new Set(ids), [ids]);
+  const clipsById = useMemo(() => new Map(project.clips.map((c) => [c.id, c])), [project.clips]);
+  const patterns = useMemo(() => new Map(project.patterns.map((p) => [p.id, p])), [project.patterns]);
+  const phrases = useMemo(() => new Map((project.phrases ?? []).map((p) => [p.id, p])), [project.phrases]);
+  const samples = useMemo(() => new Map(project.samples.map((s) => [s.id, s])), [project.samples]);
+  const selected = useMemo(() => project.clips.filter((c) => selectedIds.has(c.id)), [project.clips, selectedIds]),
     first = selected[0];
   const content = Math.max(
     bar * 16,
@@ -139,10 +145,10 @@ export function Playlist({
   );
   const sourceInfo = (c: Pick<Clip, "kind" | "sourceId">) =>
     c.kind === "pattern"
-      ? project.patterns.find((p) => p.id === c.sourceId)
+      ? patterns.get(c.sourceId)
       : c.kind === "phrase"
-        ? project.phrases?.find((p) => p.id === c.sourceId)
-        : project.samples.find((s) => s.id === c.sourceId);
+        ? phrases.get(c.sourceId)
+        : samples.get(c.sourceId);
   useEffect(() => {
     cancelGesture.current?.();
     setIds([]);
@@ -166,7 +172,7 @@ export function Playlist({
     }
   }, [stopped]);
   useEffect(() => {
-    setIds((old) => old.filter((id) => project.clips.some((c) => c.id === id)));
+    setIds((old) => old.filter((id) => clipsById.has(id)));
   }, [project.clips]);
   const point = (x: number, y: number) => ({
     tick: Math.max(0, (x - LEFT + view.x) / zoom),
@@ -219,12 +225,14 @@ export function Playlist({
             : canvasSurface.gridFine;
       ctx.fillRect(x, TOP, 1, view.h);
     }
+    const ghostClips = new Map(ghost.map((c) => [c.id, c]));
+    const erasedIds = new Set(erased);
     for (const original of [
       ...project.clips,
-      ...ghost.filter((g) => !project.clips.some((c) => c.id === g.id)),
+      ...ghost.filter((g) => !clipsById.has(g.id)),
     ]) {
-      if (erased.includes(original.id)) continue;
-      const c = ghost.find((g) => g.id === original.id) ?? original,
+      if (erasedIds.has(original.id)) continue;
+      const c = ghostClips.get(original.id) ?? original,
         info = sourceInfo(c);
       if (!info) continue;
       const x = LEFT + c.tick * zoom - view.x,
@@ -232,7 +240,7 @@ export function Playlist({
         w = c.length * zoom - 2,
         h = ROW - 8;
       if (x + w < LEFT || x > view.w || y + h < TOP || y > view.h) continue;
-      const active = ids.includes(c.id),
+      const active = selectedIds.has(c.id),
         muted = c.muted || project.tracks[c.track]?.muted,
         color = info.color;
       ctx.globalAlpha = muted ? 0.35 : 1;
@@ -254,8 +262,8 @@ export function Playlist({
       if (c.kind !== "sample") {
         const pattern =
           c.kind === "phrase"
-            ? project.phrases!.find((p) => p.id === c.sourceId)!
-            : project.patterns.find((p) => p.id === c.sourceId)!;
+            ? phrases.get(c.sourceId)!
+            : patterns.get(c.sourceId)!;
         ctx.fillStyle = color;
         for (const n of h >= 28 ? pattern.notes : []) {
           if (
@@ -374,23 +382,12 @@ export function Playlist({
     ctx.fillRect(0, 0, LEFT, TOP);
     ctx.fillStyle = "#b0b0b0";
 
-    const x = LEFT + tick * zoom - view.x;
-    if (x >= LEFT && x <= view.w) {
-      ctx.fillStyle = "#ecc17d";
-      ctx.fillRect(x, 0, 1.5, view.h);
-      ctx.beginPath();
-      ctx.moveTo(x - 5, 0);
-      ctx.lineTo(x + 6, 0);
-      ctx.lineTo(x, 7);
-      ctx.fill();
-    }
   }, [
     project,
     view,
     zoom,
     ROW,
     snap,
-    tick,
     ids,
     ghost,
     box,
@@ -949,6 +946,8 @@ export function Playlist({
             height: Math.max(view.h, TOP + ROW * project.tracks.length),
           }}
         >
+          <PlaybackCursor tick={tick} zoom={zoom} scrollX={view.x}
+            width={view.w} height={view.h} gutter={LEFT} playlist />
           <canvas
             ref={canvas}
             data-testid="playlist-canvas"

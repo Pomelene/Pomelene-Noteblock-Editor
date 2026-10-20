@@ -551,9 +551,10 @@ export class Session {
   private generation = 0;
   private path?: string;
   private saved: string;
+  private serialized: string;
   constructor(project = createDemoProject()) {
     this.project = validateProject(project);
-    this.saved = JSON.stringify(this.project);
+    this.saved = this.serialized = JSON.stringify(this.project);
   }
   get documentGeneration(): number {
     return this.generation;
@@ -567,7 +568,7 @@ export class Session {
       canRedo: !!this.future.length,
       document: {
         ...(this.path ? { path: this.path } : {}),
-        dirty: JSON.stringify(this.project) !== this.saved,
+        dirty: this.serialized !== this.saved,
       },
     };
   }
@@ -578,12 +579,12 @@ export class Session {
     this.generation++;
     this.revision++;
     this.path = undefined;
-    this.saved = JSON.stringify(this.project);
+    this.saved = this.serialized = JSON.stringify(this.project);
     return this.snapshot();
   }
   markSaved(path?: string): void {
     this.path = path ?? this.path;
-    this.saved = JSON.stringify(this.project);
+    this.saved = this.serialized;
   }
   /** Resource import joins history as one atomic transaction, without changing generation. */
   transact(change: (project: Project) => void): Snapshot {
@@ -593,11 +594,13 @@ export class Session {
   }
   private commit(next: Project): Snapshot {
     const checked = validateProject(next);
-    if (JSON.stringify(checked) === JSON.stringify(this.project))
+    const serialized = JSON.stringify(checked);
+    if (serialized === this.serialized)
       return this.snapshot();
     this.past.push(this.project);
     if (this.past.length > 100) this.past.shift();
     this.project = checked;
+    this.serialized = serialized;
     this.future = [];
     this.revision++;
     return this.snapshot();
@@ -610,14 +613,17 @@ export class Session {
       if (next) {
         to.push(this.project);
         this.project = next;
+        this.serialized = JSON.stringify(next);
         this.revision++;
       }
       return this.snapshot();
     }
     return this.transact((p) => {
       const pattern = (id: string) => find(p.patterns, id);
+      let clipsById: Map<string, Project['clips'][number]> | undefined;
       const editable = (id: string) => {
-        const c = find(p.clips, id);
+        clipsById ??= new Map(p.clips.map((c) => [c.id, c]));
+        const c = clipsById.get(id) ?? fail("对象不存在");
         if (p.tracks[c.track].locked) fail("轨道已锁定");
         return c;
       };
@@ -884,10 +890,12 @@ export class Session {
             if (p.tracks[c.track]?.locked) fail("目标轨道已锁定");
           }
           break;
-        case "clips:remove":
+        case "clips:remove": {
           command.ids.forEach(editable);
-          p.clips = p.clips.filter((c) => !command.ids.includes(c.id));
+          const removing = new Set(command.ids);
+          p.clips = p.clips.filter((c) => !removing.has(c.id));
           break;
+        }
         case "source:unique": {
           const c = editable(command.clipId);
           if (c.kind === "pattern" || c.kind === "phrase") {

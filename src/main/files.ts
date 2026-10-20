@@ -426,18 +426,29 @@ export class ProjectFiles {
         const p = this.options.session.snapshot().project,
           entries = new Map<string, Uint8Array>(),
           warnings: string[] = [];
+        const samples = new Map(p.samples.map((s) => [s.id, s]));
+        const unmappedSamples = new Set(p.instruments
+          .filter((i) => i.mappingTargetId === undefined).map((i) => i.sampleId));
+        const entryPaths = new Map<string, string>();
+        const addEntry = (relative: string, data: Uint8Array) => {
+          const key = relative.toLowerCase();
+          const duplicate = entryPaths.get(key);
+          if (duplicate !== undefined) {
+            if (!Buffer.from(entries.get(duplicate)!).equals(Buffer.from(data)))
+              throw new Error(`多个不同采样共用了路径：${relative}`);
+          } else {
+            entryPaths.set(key, relative);
+            entries.set(relative, data);
+          }
+        };
         for (const i of p.instruments.filter((i) => i.id >= 16)) {
           if (getNbsEventKind(i.name)) continue;
-          const sample = p.samples.find((s) => s.id === i.sampleId)!;
+          const sample = samples.get(i.sampleId)!;
           if (
             !sample.dataUrl &&
             !sample.builtin &&
             i.mappingTargetId !== undefined &&
-            !p.instruments.some(
-              (other) =>
-                other.sampleId === sample.id &&
-                other.mappingTargetId === undefined,
-            )
+            !unmappedSamples.has(sample.id)
           ) {
             warnings.push(
               `乐器“${i.name}”已使用映射；原音频不可用，已从采样包省略，原定义仍随工程保留。`,
@@ -448,9 +459,7 @@ export class ProjectFiles {
           if (!sample.dataUrl && copper && this.options.builtinSoundsRoot) {
             const relative=`minecraft/${copper.file}.ogg`;
             const data=await this.storage.read(join(this.options.builtinSoundsRoot,`${copper.file}.ogg`));
-            const duplicate=[...entries.keys()].find(n=>n.toLowerCase()===relative.toLowerCase());
-            if (duplicate && !Buffer.from(entries.get(duplicate)!).equals(Buffer.from(data))) throw new Error(`多个不同采样共用了路径：${relative}`);
-            if (!duplicate) entries.set(relative,data);
+            addEntry(relative, data);
             continue;
           }
           if (!sample.dataUrl)
@@ -459,15 +468,7 @@ export class ProjectFiles {
               sample.originalPath ?? `${sample.name}.wav`,
             ),
             data = Buffer.from(sample.dataUrl.split(",")[1], "base64");
-          const duplicate = [...entries.keys()].find(
-            (n) => n.toLowerCase() === relative.toLowerCase(),
-          );
-          if (duplicate) {
-            if (!Buffer.from(entries.get(duplicate)!).equals(data))
-              throw new Error(`多个不同采样共用了路径：${relative}`);
-            continue;
-          }
-          entries.set(relative, data);
+          addEntry(relative, data);
         }
         if (!entries.size)
           return this.result(true, [
@@ -600,14 +601,17 @@ export class ProjectFiles {
     warnings: string[],
     ask: boolean,
   ): Promise<void> {
-    const audioSample = (id: string) => {
-      const definitions = project.instruments.filter((i) => i.sampleId === id);
-      return (
-        !definitions.length || definitions.some((i) => !getNbsEventKind(i.name))
-      );
-    };
+    const audible = new Map<string, boolean>();
+    for (const i of project.instruments)
+      audible.set(i.sampleId, !!audible.get(i.sampleId) || !getNbsEventKind(i.name));
+    const audioSample = (id: string) => audible.get(id) !== false;
     const missing = async () => {
       let total = 0;
+      const roots = [
+        base,
+        join(base, "Sounds"),
+        ...this.soundsRoots.flatMap((p) => [p, join(p, "Sounds")]),
+      ];
       for (const sample of project.samples) {
         if (
           !audioSample(sample.id) ||
@@ -623,11 +627,6 @@ export class ProjectFiles {
           warnings.push(`无法自动加载不安全的采样路径：${sample.name}`);
           continue;
         }
-        const roots = [
-          base,
-          join(base, "Sounds"),
-          ...this.soundsRoots.flatMap((p) => [p, join(p, "Sounds")]),
-        ];
         for (const root of roots) {
           try {
             const path = resolve(root, relative);
@@ -680,21 +679,23 @@ export class ProjectFiles {
       let repaired = 0,
         added = 0;
       this.options.session.transact((p) => {
+        const byPath = new Map<string, Sample[]>();
+        const resourceKey = (path: string) =>
+          safeRelativePath(path).toLowerCase().replace(/^sounds\//, "");
+        const indexSample = (sample: Sample) => {
+          if (sample.builtin || !sample.originalPath) return;
+          try {
+            const key = resourceKey(sample.originalPath);
+            const matches = byPath.get(key) ?? [];
+            matches.push(sample);
+            byPath.set(key, matches);
+          } catch {
+            // Unsafe references are retained but cannot be repaired from a ZIP.
+          }
+        };
+        p.samples.forEach(indexSample);
         for (const [relative, bytes] of audio) {
-          const normalized = relative.toLowerCase(),
-            matches = p.samples.filter((s) => {
-              if (s.builtin || !s.originalPath) return false;
-              try {
-                return (
-                  safeRelativePath(s.originalPath)
-                    .toLowerCase()
-                    .replace(/^sounds\//, "") ===
-                  normalized.replace(/^sounds\//, "")
-                );
-              } catch {
-                return false;
-              }
-            });
+          const matches = byPath.get(resourceKey(relative)) ?? [];
           const dataUrl = audioData(bytes, relative),
             duration = wavDuration(bytes);
           if (matches.length)
@@ -704,7 +705,7 @@ export class ProjectFiles {
               repaired++;
             }
           else {
-            p.samples.push({
+            const sample: Sample = {
               id: uid(),
               name: basename(relative, extname(relative)),
               color: "#ad9bd0",
@@ -714,7 +715,9 @@ export class ProjectFiles {
               volume: 100,
               panning: 100,
               ...(duration === undefined ? {} : { duration }),
-            });
+            };
+            p.samples.push(sample);
+            indexSample(sample);
             added++;
           }
         }

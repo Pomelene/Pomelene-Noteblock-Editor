@@ -127,6 +127,24 @@ function setup() {
   vi.stubGlobal("fetch", async () => new Response(new ArrayBuffer(4)));
 }
 
+it('reuses waveform analysis by decoded audio identity, isolates results and refreshes replaced audio', async () => {
+  setup();
+  const context = new FakeContext();
+  const readChannel = vi.fn(() => new Float32Array([0, 0.5, -1, 0]));
+  context.decodeAudioData = async () => ({ duration: 10, numberOfChannels: 1, length: 4,
+    getChannelData: readChannel });
+  const { audio } = engine(context);
+  const p = project();
+  const first = await audio.getSamplePeaks(p, 's');
+  expect(first.slice(0, 4)).toEqual([0, 0.5, 1, 0]);
+  first[0] = 99;
+  expect((await audio.getSamplePeaks(p, 's'))[0]).toBe(0);
+  expect(readChannel).toHaveBeenCalledTimes(1);
+  p.samples[0].dataUrl = 'data:audio/wav;base64,AQID';
+  await audio.getSamplePeaks(p, 's');
+  expect(readChannel).toHaveBeenCalledTimes(2);
+});
+
 const previewChord = (tick = 12): Omit<Note, "id">[] => [60, 64, 67].map((pitch, i) => ({ tick: tick + i, layer: i, pitch, instrument: 0, velocity: 80 }));
 
 it("schedules an auditioned chord on one clock without moving or owning the transport", async () => {

@@ -518,28 +518,39 @@ export function encodeNbs(project: Project, version: 5 | 6 = 5): Uint8Array {
     }
   }
   notes.sort((a, b) => a.tick - b.tick || a.layer - b.layer);
-  const chunks: Buffer[] = [];
+  // Grow one contiguous buffer instead of allocating several Buffers per note.
+  let output = Buffer.allocUnsafe(4096);
   let size = 0;
+  const reserve = (length: number) => {
+    const end = size + length;
+    if (end > MAX_BYTES) throw new Error("NBS export exceeds 32 MiB");
+    if (end > output.length) {
+      const grown = Buffer.allocUnsafe(Math.min(MAX_BYTES, Math.max(end, output.length * 2)));
+      output.copy(grown, 0, 0, size);
+      output = grown;
+    }
+    const start = size;
+    size = end;
+    return start;
+  };
   const push = (b: Buffer) => {
-    size += b.length;
-    if (size > MAX_BYTES) throw new Error("NBS export exceeds 32 MiB");
-    chunks.push(b);
+    const start = reserve(b.length);
+    output.set(b, start);
   };
   const byte = (n: number) => {
     integer(n, 0, 255, "byte");
-    push(Buffer.from([n]));
+    const start = reserve(1);
+    output[start] = n;
   };
   const short = (n: number) => {
     integer(n, 0, 65535, "short");
-    const b = Buffer.alloc(2);
-    b.writeUInt16LE(n);
-    push(b);
+    const start = reserve(2);
+    output.writeUInt16LE(n, start);
   };
   const int = (n: number) => {
     integer(n, -2147483648, 2147483647, "integer");
-    const b = Buffer.alloc(4);
-    b.writeInt32LE(n);
-    push(b);
+    const start = reserve(4);
+    output.writeInt32LE(n, start);
   };
   const str = (key: string, value: string) => {
     if (typeof value !== "string") throw new Error("Invalid NBS string");
@@ -617,5 +628,5 @@ export function encodeNbs(project: Project, version: 5 | 6 = 5): Uint8Array {
     byte(c.key);
     byte(integer(c.pressKey, 0, 1, "press key"));
   });
-  return Buffer.concat(chunks);
+  return output.subarray(0, size);
 }

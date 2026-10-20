@@ -1,4 +1,4 @@
-Pomelene Noteblock Editor 0.5.8 — 开始页与实时声纹
+Pomelene Noteblock Editor 0.5.9 — 开始页与实时声纹
 
 打开应用目录后运行“Pomelene Noteblock Editor.exe”。请保留同目录 resources 等文件。
 不需要安装 Node.js。源码另放在独立 source ZIP 中。

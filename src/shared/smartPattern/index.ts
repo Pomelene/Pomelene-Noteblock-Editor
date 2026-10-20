@@ -53,18 +53,10 @@ export function collectMusicalEvents(project: Project): string[] {
   return events.sort();
 }
 
-function fingerprint(value: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index++)
-    hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
-  return hash >>> 0;
-}
-
 export function organizeImportedProject(
   input: Project,
   overrides: Partial<SmartPatternProfile> = {},
 ): { project: Project; summary: NbsImportSummary } {
-  const project = structuredClone(input);
   const profile = resolveProfile(overrides);
   const original = {
     patterns: input.patterns.length,
@@ -172,6 +164,7 @@ export function organizeImportedProject(
     )
       return fallback("空曲布局超过 Pattern 或引用预算；已保留原布局。");
     summary.applicable = true;
+    const project = structuredClone(input);
     project.importOrganization = {
       version: ALGORITHM_VERSION,
       summary: structuredClone(summary),
@@ -220,8 +213,8 @@ export function organizeImportedProject(
     color: pattern.color,
   }));
   for (const [groupIndex, group] of groups.entries()) {
-    // Hashes only select a bucket. Full signature equality authorizes reuse.
-    const shared = new Map<number, { signature: string; pattern: Pattern }[]>();
+    // Map compares the complete signature, including optional note values.
+    const shared = new Map<string, Pattern>();
     let cursor = 0,
       patternCount = 0,
       clipCount = 0;
@@ -264,15 +257,7 @@ export function organizeImportedProject(
           ),
         ),
       ]);
-      const hash = fingerprint(signature);
-      let bucket = shared.get(hash);
-      if (!bucket) {
-        bucket = [];
-        shared.set(hash, bucket);
-      }
-      let source = bucket.find(
-        (entry) => entry.signature === signature,
-      )?.pattern;
+      let source = shared.get(signature);
       if (!source) {
         if (patterns.length >= profile.maxPatterns)
           return fallback("整理后的 Pattern 数超过预算；已保留原布局。");
@@ -289,7 +274,7 @@ export function organizeImportedProject(
           })),
         };
         patterns.push(source);
-        bucket.push({ signature, pattern: source });
+        shared.set(signature, source);
         patternCount++;
       }
       if (clips.length >= profile.maxClips)
@@ -321,9 +306,9 @@ export function organizeImportedProject(
   for (const candidate of clips)
     if (!last || candidate.tick >= last.tick) last = candidate;
   if (last) last.length = pattern.length - last.tick;
-  project.patterns = patterns;
-  project.clips = clips;
-  project.tracks = tracks;
+  // Output layout is newly allocated; clone only retained metadata/resources.
+  const { patterns: _patterns, clips: _clips, tracks: _tracks, ...retained } = input;
+  const project: Project = { ...structuredClone(retained), patterns, clips, tracks };
   const before = collectMusicalEvents(input),
     after = collectMusicalEvents(project);
   if (

@@ -49,6 +49,7 @@ export class AudioEngine {
   private timer?: ReturnType<typeof setInterval>;
   private running?: Running;
   private buffers = new Map<string, Promise<AudioBuffer>>();
+  private peaks = new WeakMap<AudioBuffer, number[]>();
   private sources = new Set<AudioBufferSourceNode>();
   private previewSources = new Set<AudioBufferSourceNode>();
   private previewGeneration = 0;
@@ -583,8 +584,10 @@ export class AudioEngine {
   async getSamplePeaks(project: Project, sampleId: string): Promise<number[]> {
     const sample = project.samples.find((s) => s.id === sampleId);
     if (!sample) throw new Error(`Missing sample: ${sampleId}`);
-    const buffer = await this.buffer(sample),
-      count = 160,
+    const buffer = await this.buffer(sample);
+    const cached = this.peaks.get(buffer);
+    if (cached) return cached.slice();
+    const count = 160,
       peaks = new Array<number>(count).fill(0);
     const stride = Math.max(1, Math.ceil(buffer.length / count));
     for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
@@ -598,7 +601,8 @@ export class AudioEngine {
           peaks[bin] = Math.max(peaks[bin], Math.abs(data[i]));
       }
     }
-    return peaks;
+    this.peaks.set(buffer, peaks);
+    return peaks.slice();
   }
   async getSampleDuration(project: Project, sampleId: string): Promise<number> {
     const sample = project.samples.find((s) => s.id === sampleId);

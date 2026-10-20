@@ -1,6 +1,5 @@
 import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { decodeNbs, encodeNbs } from "../src/legacy/nbs";
 import { fromNbs, toNbs } from "../src/shared/io";
@@ -34,7 +33,6 @@ for (const file of await files(corpus)) {
   const row: Record<string, unknown> = {
     file: relative(corpus, file),
     bytes: data.length,
-    sha256: createHash("sha256").update(data).digest("hex"),
     version: data.length < 2 ? null : data.readUInt16LE(0) === 0 ? data[2] : 0,
   };
   let decoded;

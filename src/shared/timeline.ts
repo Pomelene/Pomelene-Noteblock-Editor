@@ -4,6 +4,8 @@ import {
   type Note,
   type Pattern,
   type Project,
+  type Instrument,
+  type Sample,
 } from "./model";
 import { buildTempoMap, type TempoMap } from "./tempo";
 import { stopRangeForEvent } from "./nbsEvents";
@@ -35,12 +37,16 @@ const pan = (n: number) => clamp((n - 100) / 100, -1, 1);
 export function sampleEvent(project: Project, sampleId: string): AudioEvent {
   const sample = project.samples.find((s) => s.id === sampleId);
   if (!sample) throw new Error(`Missing sample: ${sampleId}`);
+  return eventForSample(sample);
+}
+
+function eventForSample(sample: Sample): AudioEvent {
   if (!sample.dataUrl && !sample.builtin)
     throw new Error(`Sample has no audio: ${sample.name}`);
   return {
-    id: sampleId,
+    id: sample.id,
     kind: "sample",
-    sampleId,
+    sampleId: sample.id,
     tick: 0,
     durationTicks: Infinity,
     offsetTicks: 0,
@@ -61,8 +67,18 @@ export function noteEvent(
     instrument.mappingTargetId === undefined
       ? instrument
       : project.instruments.find((i) => i.id === instrument.mappingTargetId)!;
-  const event = sampleEvent(project, target.sampleId);
   const sample = project.samples.find((s) => s.id === target.sampleId)!;
+  if (!sample) throw new Error(`Missing sample: ${target.sampleId}`);
+  return eventForNote(note, instrument, sample, layer);
+}
+
+function eventForNote(
+  note: Note,
+  instrument: Instrument,
+  sample: Sample,
+  layer?: Layer,
+): AudioEvent {
+  const event = eventForSample(sample);
   // NBS calculations and OpenNBS toggle_playing/play_sound: layer center keeps
   // note pan; other layers average it. Custom instrument key ADDS key - 45.
   const notePan = note.panning ?? 100;
@@ -90,6 +106,16 @@ export function noteEvent(
 
 export function buildEvents(project: Project, scope = "song"): EventPlan {
   const events: AudioEvent[] = [];
+  // These indexes belong to this plan, never to a mutable project/global cache.
+  const samples = new Map(project.samples.map((s) => [s.id, s]));
+  const instruments = new Map(project.instruments.map((i) => [i.id, i]));
+  const patterns = new Map(project.patterns.map((p) => [p.id, p]));
+  const phrases = new Map((project.phrases ?? []).map((p) => [p.id, p]));
+  function sampleTrigger(id: string) {
+    const sample = samples.get(id);
+    if (!sample) throw new Error(`Missing sample: ${id}`);
+    return eventForSample(sample);
+  }
   const secondsPerTick = 60 / project.bpm / 4;
   function addPattern(
     pattern: Pattern,
@@ -109,7 +135,13 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
         note.tick >= pattern.length
       )
         continue;
-      const event = noteEvent(project, note, layer);
+      const instrument = instruments.get(note.instrument);
+      if (!instrument) throw new Error(`Missing instrument: ${note.instrument}`);
+      const target = instrument.mappingTargetId === undefined
+        ? instrument : instruments.get(instrument.mappingTargetId)!;
+      const sample = samples.get(target.sampleId);
+      if (!sample) throw new Error(`Missing sample: ${target.sampleId}`);
+      const event = eventForNote(note, instrument, sample, layer);
       events.push({
         ...event,
         id: `${id}:${note.id}`,
@@ -127,14 +159,12 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
   }
   let endTick: number;
   if (scope !== "song") {
-    const pattern = [...project.patterns, ...(project.phrases ?? [])].find(
-      (p) => p.id === scope,
-    );
+    const pattern = patterns.get(scope) ?? phrases.get(scope);
     if (pattern) {
       endTick = pattern.length;
       addPattern(pattern, pattern.id, 0, pattern.length, 0);
     } else {
-      const sample = project.samples.find((s) => s.id === scope);
+      const sample = samples.get(scope);
       if (!sample) throw new Error(`Missing source: ${scope}`);
       // Unknown duration is resolved from the decoded AudioBuffer by the engine.
       endTick =
@@ -142,7 +172,7 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
           ? Infinity
           : sample.duration / secondsPerTick;
       events.push({
-        ...sampleEvent(project, sample.id),
+        ...eventForSample(sample),
         id: `${sample.id}:sample`,
         durationTicks: endTick,
       });
@@ -163,9 +193,7 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
       )
         continue;
       if (clip.kind === "pattern" || clip.kind === "phrase") {
-        const pattern = (
-          clip.kind === "pattern" ? project.patterns : (project.phrases ?? [])
-        ).find((p) => p.id === clip.sourceId);
+        const pattern = (clip.kind === "pattern" ? patterns : phrases).get(clip.sourceId);
         if (!pattern) throw new Error(`Missing pattern: ${clip.sourceId}`);
         addPattern(
           pattern,
@@ -177,7 +205,7 @@ export function buildEvents(project: Project, scope = "song"): EventPlan {
         );
       } else {
         events.push({
-          ...sampleEvent(project, clip.sourceId),
+          ...sampleTrigger(clip.sourceId),
           id: `${clip.id}:sample`,
           tick: clip.tick,
           durationTicks: clip.length,

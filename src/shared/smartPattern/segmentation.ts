@@ -44,6 +44,8 @@ export function segmentGroup(
   for (const bar of bars)
     prefix.push(prefix[prefix.length - 1] + bar.notes.length);
   const frequencies = new Map<string, Frequency>();
+  const supports = bars.map((bar, index) => index + 1 < barCount
+    ? boundarySupport(bar, bars[index + 1], barTicks) : 1);
   for (let start = 0; start < barCount; start++) {
     const lengths = new Set(
       profile.candidateBars.map((n) => Math.min(n, barCount - start)),
@@ -69,10 +71,7 @@ export function segmentGroup(
     for (const candidate of choices[start]) {
       const { end, key, noteCount } = candidate;
       const frequency = frequencies.get(key)!.count;
-      const support =
-        end < barCount
-          ? boundarySupport(bars[end - 1], bars[end], barTicks)
-          : 1;
+      const support = supports[end - 1];
       const localCost =
         noteCount === 0
           ? 0

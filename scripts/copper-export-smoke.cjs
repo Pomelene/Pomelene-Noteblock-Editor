@@ -2,14 +2,15 @@ const { _electron: electron } = require('playwright');
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const expectedVersion = require('../package.json').version;
 (async()=>{
   const output=path.resolve('test-results/copper-export'); fs.mkdirSync(output,{recursive:true});
   const packaged=process.argv.includes('--packaged');
-  const exe=process.env.NBE_EXE || path.resolve('../deliverables/PomeleneNoteblockEditor-0.5.8/win-unpacked/Pomelene Noteblock Editor.exe');
+  const exe=process.env.NBE_EXE || path.resolve(`../deliverables/PomeleneNoteblockEditor-${expectedVersion}/win-unpacked/Pomelene Noteblock Editor.exe`);
   const app=await electron.launch({executablePath:packaged ? exe : require('electron'),args:packaged ? [] : ['.'],env:{...process.env,NBE_SMOKE_TEST:'1'}});
   try {
     const version=await app.evaluate(({app})=>app.getVersion());
-    assert.equal(version,'0.5.8');
+    assert.equal(version, expectedVersion);
     const page=await app.firstWindow(); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
     await app.evaluate(({dialog,BrowserWindow})=>{
       BrowserWindow.getAllWindows()[0].show();

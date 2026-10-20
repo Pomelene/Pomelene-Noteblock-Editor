@@ -42,6 +42,7 @@ import {
 import { noteDrawRect } from "./noteGeometry";
 import { canvasSurface } from "./canvasTheme";
 import { ChordGenerator } from "./ChordGenerator";
+import { PlaybackCursor } from "./PlaybackCursor";
 import { COPPER_INSTRUMENTS, copperForSample } from "../../shared/copper";
 import { resolveShortcut } from "./shortcuts";
 import {
@@ -116,7 +117,11 @@ export function PatternEditor({
     onScroll: updateScroll,
   });
   const previousSnap = useRef<SnapId>("auto");
-  const choices = instrumentChoices(project.instruments, pattern.notes);
+  const choices = useMemo(() => instrumentChoices(project.instruments, pattern.notes),
+    [project.instruments, pattern.notes]);
+  const instruments = useMemo(() => new Map(project.instruments.map((i) => [i.id, i])), [project.instruments]);
+  const samples = useMemo(() => new Map(project.samples.map((s) => [s.id, s])), [project.samples]);
+  const noteColor = (id: number) => samples.get(instruments.get(id)?.sampleId ?? '')?.color ?? pattern.color;
   useEffect(() => {
     const strip = instrumentChoicesRef.current;
     const chip = strip?.querySelector<HTMLElement>(
@@ -168,9 +173,9 @@ export function PatternEditor({
     () => new Set(pattern.notes.map((n) => n.id)),
     [pattern.notes],
   );
-  const selected = pattern.notes.filter((n) => selectedIds.has(n.id)),
+  const selected = useMemo(() => pattern.notes.filter((n) => selectedIds.has(n.id)), [pattern.notes, selectedIds]),
     first = selected[0],
-    ins = project.instruments.find((i) => i.id === instrument);
+    ins = instruments.get(instrument);
   useEffect(() => {
     const el = scroller.current!;
     const ro = new ResizeObserver(() =>
@@ -306,12 +311,7 @@ export function PatternEditor({
           view.y,
         );
       if (x + w < L || x > view.w || y + rh < H || y > view.h) continue;
-      const instrumentDef = project.instruments.find(
-          (i) => i.id === note.instrument,
-        ),
-        color =
-          project.samples.find((s) => s.id === instrumentDef?.sampleId)
-            ?.color ?? pattern.color,
+      const color = noteColor(note.instrument),
         active = selectedIds.has(note.id),
         locked = pattern.layers[note.layer]?.locked,
         muted = pattern.layers[note.layer]?.muted;
@@ -391,11 +391,6 @@ export function PatternEditor({
     ctx.fillRect(0, 0, L, H);
     ctx.fillStyle = "#b0b0b0";
 
-    const x = L + (playTick ?? cursor) * zoom - view.x;
-    if (x >= L && x < view.w) {
-      ctx.fillStyle = "#e7b66e";
-      ctx.fillRect(x, 0, 1, view.h);
-    }
   }, [
     pattern,
     project.instruments,
@@ -408,9 +403,7 @@ export function PatternEditor({
     ids,
     ghost,
     box,
-    cursor,
     layer,
-    playTick,
     erased,
     instrument,
     showAllInstruments,
@@ -582,12 +575,12 @@ export function PatternEditor({
     );
     if (scroller.current) scroller.current.scrollLeft = 0;
   }
-  const visibleNotes = pattern.notes.filter(
+  const visibleNotes = useMemo(() => pattern.notes.filter(
     (n) =>
       n.tick * zoom >= view.x - unit * zoom &&
       n.tick * zoom < view.x + view.w - L &&
       (ids.length ? selectedIds.has(n.id) : n.layer === layer),
-  );
+  ), [pattern.notes, zoom, view.x, view.w, unit, selectedIds, layer]);
   return (
     <div
       className="pattern-editor"
@@ -1172,6 +1165,8 @@ export function PatternEditor({
               height: Math.max(view.h, H + rows * rh),
             }}
           >
+            <PlaybackCursor tick={playTick ?? cursor} zoom={zoom} scrollX={view.x}
+              width={view.w} height={view.h} gutter={L} />
             <canvas
               ref={canvas}
               data-testid="note-canvas"
@@ -1676,13 +1671,7 @@ export function PatternEditor({
                 ),
                 left: n.tick * zoom - view.x,
                 height: Math.max(3, n.velocity * 0.42),
-                background:
-                  project.samples.find(
-                    (s) =>
-                      s.id ===
-                      project.instruments.find((i) => i.id === n.instrument)
-                        ?.sampleId,
-                  )?.color ?? pattern.color,
+                background: noteColor(n.instrument),
               }}
               onPointerDown={(e) => {
                 const el = e.currentTarget,

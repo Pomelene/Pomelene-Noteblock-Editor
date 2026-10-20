@@ -1,14 +1,18 @@
 appId: studio.noteblock.editor
 productName: Pomelene Noteblock Editor
 directories:
-  output: ../deliverables/PomeleneNoteblockEditor-0.5.8
+  output: ../deliverables/PomeleneNoteblockEditor-0.5.9
 artifactName: PomeleneNoteblockEditor-${version}-windows-${arch}.${ext}
 files:
   - out/**/*
   - package.json
 asar: true
 afterPack: scripts/installer-after-pack.cjs
-compression: normal
+compression: maximum
+electronLanguages:
+  - en-US
+  - zh-CN
+  - zh-TW
 electronDist: node_modules/electron/dist
 extraFiles:
   - from: resources/使用说明.txt

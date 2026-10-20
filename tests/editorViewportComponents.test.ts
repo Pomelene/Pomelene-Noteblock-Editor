@@ -36,7 +36,9 @@ describe.skipIf(!executablePath)("editor row density and time zoom", () => {
             const project={id:'project',meter:'4/4',bpm:120,patterns:[pattern],phrases:[],clips:[],loop:{enabled:false,start:0,end:64},tracks:Array.from({length:48},(_,i)=>({id:'t'+i,name:'Track '+i,color:'#75b9b0',locked:false,muted:false,solo:false})),samples:[],instruments:[{id:0,name:'Harp'}]};
             const style=document.createElement('style');style.textContent='body{margin:0}#root{width:100vw;height:100vh;display:flex}.playlist,.pattern-editor{width:100%;height:100%}';document.head.appendChild(style);
             const common={project,pattern,source:{kind:'pattern',id:'p'},chooseSource:()=>{},run:async c=>{window.commands.push(c)},seek:n=>window.seeks.push(n),open:()=>{},menu:()=>{},text:()=>{},report:()=>{},stopped:0,tick:0};
-            createRoot(document.getElementById('root')).render(React.createElement(location.search.includes('pattern')?PatternEditor:Playlist,common));
+            const root=createRoot(document.getElementById('root'));
+            window.setTick=tick=>root.render(React.createElement(location.search.includes('pattern')?PatternEditor:Playlist,{...common,tick,playTick:tick}));
+            window.setTick(0);
           </script></body></html>`,
               );
               res.setHeader("Content-Type", "text/html");
@@ -117,6 +119,23 @@ describe.skipIf(!executablePath)("editor row density and time zoom", () => {
     );
   }
   for (const c of configs) {
+    it(`${c.name} moves the playhead without repainting musical content or intercepting input`, async () => {
+      const page = await setup(c.name);
+      try {
+        await page.evaluate(() => new Promise(requestAnimationFrame));
+        const canvas = page.getByTestId(c.canvas);
+        const before = await canvas.evaluate(el => (el as HTMLCanvasElement).toDataURL());
+        await page.evaluate(() => (window as any).setTick(4));
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        expect(await canvas.evaluate(el => (el as HTMLCanvasElement).toDataURL())).toBe(before);
+        const cursor = page.getByTestId('playback-cursor');
+        const original = (await canvas.boundingBox())!;
+        const marker = (await cursor.boundingBox())!;
+        expect(marker.x).toBeCloseTo(original.x, 1);
+        expect(marker.y).toBeCloseTo(original.y, 1);
+        expect(await cursor.evaluate(el => getComputedStyle(el).pointerEvents)).toBe('none');
+      } finally { await page.close(); }
+    });
     it(`${c.name} shows row height beside the first tool group before scrolling a compact toolbar`, async () => {
       const page = await setup(c.name, 520);
       try {

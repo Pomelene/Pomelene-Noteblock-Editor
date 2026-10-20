@@ -239,7 +239,7 @@ const snapshot = () => page.evaluate(() => window.studio.getSnapshot());
         await editor.waitForSelector(".pattern-editor");
         await (await app.browserWindow(editor)).evaluate((win) => win.show());
         await editor.getByLabel("播放", { exact: true }).click();
-        await expect(editor.locator(".transport-state")).toHaveText("PLAYING");
+        await expect(editor.getByLabel("暂停", { exact: true })).toBeVisible();
         await expect
           .poll(() =>
             page.evaluate(() => window.transportSignals.at(-1)?.tick ?? 0),
@@ -256,7 +256,7 @@ const snapshot = () => page.evaluate(() => window.studio.getSnapshot());
         );
         await editor.getByLabel("停靠回主窗口").click();
         await expect.poll(() => editor.isClosed()).toBe(true);
-        await expect(page.locator(".transport-state")).toHaveText("PAUSED");
+        await expect(page.locator(".transport-play")).toHaveAttribute("aria-label", "播放");
         await expect
           .poll(() => page.evaluate(() => window.transportSignals.at(-1)))
           .toEqual(paused);
