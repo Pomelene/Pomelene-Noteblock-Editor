@@ -1,5 +1,7 @@
 # Pomelene Noteblock Editor
 
+**简体中文** | [English](README.en.md)
+
 **作者：柚烯Pomelene** · [GitHub 主页](https://github.com/Pomelene)
 
 问题反馈与功能建议：[提交 Issue](https://github.com/Pomelene/Pomelene-Noteblock-Editor/issues)。反馈问题时，请尽量附上软件版本、操作步骤和截图。
