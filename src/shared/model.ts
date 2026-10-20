@@ -134,6 +134,7 @@ export interface Snapshot {
   document: { path?: string; dirty: boolean };
 }
 export type Command =
+  | { type: "instrument:addCopper" }
   | { type: "notes:chord"; patternId: string; placement: ChordPlacement }
   | { type: "instrument:map"; id: number; targetId?: number }
   | { type: "import:restoreOriginal" }

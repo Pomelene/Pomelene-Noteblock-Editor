@@ -15,7 +15,7 @@ This page is available in English. The application interface and the detailed do
 A **Windows x64 installer** is currently available. It includes the required runtime; you do not need to install Node.js or any development tools.
 
 1. Open the **[latest release page](https://github.com/Pomelene/Pomelene-Noteblock-Editor/releases/latest)**.
-2. Under **Assets**, download the installer whose name ends in **`Setup-x64.exe`**, such as `PomeleneNoteblockEditor-0.5.7-Setup-x64.exe`.
+2. Under **Assets**, download the installer whose name ends in **`Setup-x64.exe`**, such as `PomeleneNoteblockEditor-0.5.8-Setup-x64.exe`.
 3. Run the installer and choose an installation location. Select a parent directory; setup will create a `Pomelene Noteblock Editor` folder inside it.
 4. Once installation is complete, launch **Pomelene Noteblock Editor** using its desktop or Start menu shortcut.
 
@@ -61,9 +61,9 @@ Uninstall through Windows **Installed apps**, or run `Uninstall Pomelene Noteblo
 
 ### Compatibility and development status
 
-- Reads **NBS v0–6** and exports **NBS v5**. The new v6 copper instrument requires its corresponding audio resource.
+- Reads **NBS v0–6** and exports **NBS v5 or v6**. All four copper timbres are bundled: v6 uses native instrument IDs, while v5 uses a custom-instrument sample pack.
 - Projects use the version-tagged **v2 `.nbproject`** format. Earlier JSON project files are not supported.
 - Smart organization is still being improved. Complex parts and phrases spanning bar boundaries may need manual adjustment.
 - Intelligent MIDI conversion, a drum-pattern library, and semi-automatic arrangement enrichment have not been implemented yet.
 
-Further reading (Chinese): [User guide](resources/使用说明.txt) · [0.5.7 release notes](docs/release-0.5.7.md) · [Development guide](docs/development.md) · [References](docs/reference-notes.md)
+Further reading (Chinese): [User guide](resources/使用说明.txt) · [0.5.8 release notes](docs/release-0.5.8.md) · [Development guide](docs/development.md) · [References](docs/reference-notes.md)

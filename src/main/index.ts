@@ -33,6 +33,7 @@ let audioOwner:
   | { window: BrowserWindow; owner: string; state?: TransportState }
   | undefined;
 const files = new ProjectFiles({
+  builtinSoundsRoot: resolve(here,"../renderer/sounds"),
   session,
   getWindow: () => BrowserWindow.getFocusedWindow() ?? main,
   chooseImport: (summary, owner) => {

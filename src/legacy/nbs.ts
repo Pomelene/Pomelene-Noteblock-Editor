@@ -12,6 +12,8 @@ export interface NbsLayer {
   panning: number;
 }
 export interface NbsCustomInstrument {
+  /** Native v6 identity, kept separately from stable editor custom IDs. */
+  vanillaId?: number;
   name: string;
   file: string;
   key: number;
@@ -276,6 +278,7 @@ export function decodeNbs(data: Uint8Array): NbsProject {
           "trumpet_oxidized",
         ];
         customInstruments.push({
+          vanillaId: n.instrument,
           name: names[n.instrument - 16],
           file: `minecraft/${files[n.instrument - 16]}.ogg`,
           key: 45,
@@ -331,7 +334,7 @@ export function decodeNbs(data: Uint8Array): NbsProject {
     warnings.push("视觉控制事件已保留；当前不会执行视觉效果或保存文件操作。");
   if (copper.size)
     warnings.push(
-      "NBS v6 铜号（Trumpet）已保留为具名自定义乐器，导出 v5 时需附带对应音频采样；未用其他音色替代。",
+      "已识别 NBS v6 铜号（Trumpet）；编辑器使用对应内置音频，导出 v6 时保留原生音色。",
     );
   if (customCount)
     warnings.push(
@@ -384,13 +387,33 @@ export function decodeNbs(data: Uint8Array): NbsProject {
   };
 }
 
-/** Writes version 5. Clips are rendered in full; colliding notes get extra layers with copied settings. */
-export function encodeNbs(project: Project): Uint8Array {
+/** Editor IDs retain base 16; v6 wire IDs and custom definitions are remapped together. */
+export function encodeNbs(project: Project, version: 5 | 6 = 5): Uint8Array {
+  if (version !== 5 && version !== 6) throw new Error('仅支持导出 NBS v5 或 v6');
   const meta = (project as NbsProject).nbs;
   const { signature, tempo } = exportTiming(project);
   const vanilla = VANILLA_INSTRUMENTS;
   const custom = meta?.customInstruments ?? [];
-  integer(custom.length, 0, 255, "custom instrument count");
+  integer(custom.length, 0, 255, "editor custom instrument count");
+  const outputVanilla = version === 6 ? 20 : 16;
+  const outputCustom: {definition:NbsCustomInstrument; sourceIndex:number}[] = [];
+  const outputIds = new Map<number,number>();
+  custom.forEach((definition,index)=>{
+    const native = definition.vanillaId;
+    if (native!==undefined) {
+      integer(native,16,19,'copper instrument ID');
+      if (getNbsEventKind(definition.name)) throw new Error('NBS 控制定义不能标记为铜号');
+    }
+    if (version===6 && native!==undefined && Number.isInteger(native) && native>=16 && native<=19 && definition.key===45 && definition.pressKey===0) {
+      outputIds.set(16+index,native);
+    } else {
+      outputIds.set(16+index,outputVanilla+outputCustom.length);
+      outputCustom.push({definition,sourceIndex:index});
+    }
+  });
+  // Preserve legacy v5 producers' unused definition slots, including slots
+  // beyond the note byte's addressable range. v6 follows its 236-slot limit.
+  integer(outputCustom.length,0,version===6 ? 236 : 255,`v${version} custom instrument count`);
   const layers = (meta?.layers ?? []).map((l) => ({ ...l }));
   integer(layers.length, 0, 4096, "layer count");
   const notes: Note[] = [],
@@ -530,8 +553,8 @@ export function encodeNbs(project: Project): Uint8Array {
     push(b);
   };
   short(0);
-  byte(5);
-  byte(vanilla);
+  byte(version);
+  byte(outputVanilla);
   short(length);
   short(layers.length);
   str("title", project.title);
@@ -572,7 +595,7 @@ export function encodeNbs(project: Project): Uint8Array {
       const n = notes[index++];
       short(n.layer - previousLayer);
       previousLayer = n.layer;
-      byte(n.instrument);
+      byte(outputIds.get(n.instrument) ?? n.instrument);
       byte(n.pitch - 21);
       byte(n.velocity);
       byte(n.panning ?? 100);
@@ -587,8 +610,8 @@ export function encodeNbs(project: Project): Uint8Array {
     byte(integer(l.volume, 0, 100, "layer volume"));
     byte(integer(l.panning, 0, 200, "layer pan"));
   });
-  byte(custom.length);
-  custom.forEach((c, i) => {
+  byte(outputCustom.length);
+  outputCustom.forEach(({definition:c,sourceIndex:i}) => {
     str(`custom.${i}.name`, c.name);
     str(`custom.${i}.file`, c.file);
     byte(c.key);

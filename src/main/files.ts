@@ -17,6 +17,7 @@ import type {
 import { organizeImportedProject } from "../shared/smartPattern";
 import { isProjectV2 } from "../shared/projectCodec";
 import { getNbsEventKind } from "../shared/nbsEvents";
+import { copperForSample } from "../shared/copper";
 import type { ImportChoice } from "./importBroker";
 import { Session, createEmptyProject, uid } from "../shared/session";
 import {
@@ -36,6 +37,7 @@ import {
 } from "./zip";
 
 export interface FileDialogs {
+  nbsVersion?(): Promise<5 | 6 | undefined>;
   open(
     kind:
       | "project"
@@ -87,6 +89,12 @@ export function nativeFileDialogs(
   getWindow: () => BrowserWindow | undefined,
 ): FileDialogs {
   return {
+    async nbsVersion() {
+      const {dialog}=await import('electron'), win=getWindow();
+      const options: MessageBoxOptions={type:'question',message:'选择 NBS 导出版本',detail:'v6 支持 20 种原版音色（含四种铜号）；v5 兼容旧工具，铜号需通过自定义乐器采样包播放。',buttons:['NBS v6（推荐）','NBS v5（兼容旧版）','取消'],defaultId:0,cancelId:2,noLink:true};
+      const choice=await (win ? dialog.showMessageBox(win,options) : dialog.showMessageBox(options));
+      return choice.response===0 ? 6 : choice.response===1 ? 5 : undefined;
+    },
     async open(kind) {
       const { dialog } = await import("electron"),
         win = getWindow(),
@@ -244,6 +252,7 @@ function wavDuration(bytes: Uint8Array): number | undefined {
   return rate ? size / rate : undefined;
 }
 interface Options {
+  builtinSoundsRoot?: string;
   session: Session;
   getWindow?: () => BrowserWindow | undefined;
   dialogs?: FileDialogs;
@@ -404,7 +413,10 @@ export class ProjectFiles {
         return this.result(true, warnings);
       }
       if (action === "exportNbs") {
-        const converted = toNbs(this.options.session.snapshot().project),
+        const before=this.options.session.snapshot();
+        const version=this.dialogs.nbsVersion ? await this.dialogs.nbsVersion() : 5;
+        if (version===undefined) return this.result(false);
+        const converted = toNbs(before.project,version),
           path = await this.dialogs.save("nbs", this.suggest(".nbs"));
         if (!path) return this.result(false);
         await this.storage.write(path, converted.data);
@@ -419,6 +431,7 @@ export class ProjectFiles {
           const sample = p.samples.find((s) => s.id === i.sampleId)!;
           if (
             !sample.dataUrl &&
+            !sample.builtin &&
             i.mappingTargetId !== undefined &&
             !p.instruments.some(
               (other) =>
@@ -429,6 +442,15 @@ export class ProjectFiles {
             warnings.push(
               `乐器“${i.name}”已使用映射；原音频不可用，已从采样包省略，原定义仍随工程保留。`,
             );
+            continue;
+          }
+          const copper = copperForSample(sample);
+          if (!sample.dataUrl && copper && this.options.builtinSoundsRoot) {
+            const relative=`minecraft/${copper.file}.ogg`;
+            const data=await this.storage.read(join(this.options.builtinSoundsRoot,`${copper.file}.ogg`));
+            const duplicate=[...entries.keys()].find(n=>n.toLowerCase()===relative.toLowerCase());
+            if (duplicate && !Buffer.from(entries.get(duplicate)!).equals(Buffer.from(data))) throw new Error(`多个不同采样共用了路径：${relative}`);
+            if (!duplicate) entries.set(relative,data);
             continue;
           }
           if (!sample.dataUrl)

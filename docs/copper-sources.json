@@ -1,0 +1,11 @@
+{
+  "source": "Locally installed Minecraft Java assets, asset index 34.json",
+  "rights": "Minecraft audio assets; rights belong to their respective owners.",
+  "hashVerificationPerformed": false,
+  "files": [
+    {"file":"trumpet.ogg","asset":"minecraft/sounds/note/trumpet.ogg","bytes":6092},
+    {"file":"trumpet_exposed.ogg","asset":"minecraft/sounds/note/trumpet_exposed.ogg","bytes":6319},
+    {"file":"trumpet_weathered.ogg","asset":"minecraft/sounds/note/trumpet_weathered.ogg","bytes":5886},
+    {"file":"trumpet_oxidized.ogg","asset":"minecraft/sounds/note/trumpet_oxidized.ogg","bytes":6108}
+  ]
+}

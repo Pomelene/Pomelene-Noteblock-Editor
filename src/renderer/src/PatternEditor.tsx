@@ -42,6 +42,7 @@ import {
 import { noteDrawRect } from "./noteGeometry";
 import { canvasSurface } from "./canvasTheme";
 import { ChordGenerator } from "./ChordGenerator";
+import { COPPER_INSTRUMENTS, copperForSample } from "../../shared/copper";
 import { resolveShortcut } from "./shortcuts";
 import {
   instrumentChoices,
@@ -939,6 +940,10 @@ export function PatternEditor({
               ))}
             </select>
           </label>
+          {!COPPER_INSTRUMENTS.every(c => project.instruments.some(i => {
+            const sample=project.samples.find(s=>s.id===i.sampleId);
+            return sample && copperForSample(sample)?.id===c.id;
+          })) && <button aria-label="添加内置铜号" title="添加四种铜号；已有自定义乐器编号保持不变" onClick={()=>void run({type:'instrument:addCopper'}).catch(e=>report(e.message))}>添加铜号</button>}
           <button
             title="预听当前音色"
             aria-label="预听当前音色"

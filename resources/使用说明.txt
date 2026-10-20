@@ -1,4 +1,4 @@
-Pomelene Noteblock Editor 0.5.7 — 开始页与实时声纹
+Pomelene Noteblock Editor 0.5.8 — 开始页与实时声纹
 
 打开应用目录后运行“Pomelene Noteblock Editor.exe”。请保留同目录 resources 等文件。
 不需要安装 Node.js。源码另放在独立 source ZIP 中。
@@ -79,7 +79,7 @@ Pattern 对象列表右键 → 保存为片段采样，创建独立快照。
 保存与交换
 Ctrl+S 保存完整 .nbproject，包含 Pattern、采样、引用、图层和内嵌音频。
 首次保存会询问位置；Ctrl+Shift+S 另存。导入 NBS 后保存工程使用新的工程文件。
-Ctrl+E 导出 NBS v5。读取支持 NBS v0–v6；导出仍为 v5。v6 铜号保留为具名自定义资源，需要对应音频。
+Ctrl+E 导出 NBS，可选择 v6（推荐）或 v5（兼容旧版）。读取支持 NBS v0–v6。Pattern 音色栏点击“添加铜号”可添加四种真实铜号音色；v6 原生保存铜号，v5 作为自定义乐器保存，并需同时导出乐器采样包。
 内部细分网格可含小数 tick；NBS 仅支持整数 tick，导出时会提示取整。
 原始音频采样引用无法成为 NBS 音符，导出会提示省略；工程文件保留完整内容。
 音频资源预听的基准/音量/声像仅在工程中生效，NBS 使用音符/图层/自定义乐器调音数据。

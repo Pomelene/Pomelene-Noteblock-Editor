@@ -1,5 +1,6 @@
 import { getNbsEventKind } from "./nbsEvents";
 import { planChordPlacement } from "./chords";
+import { addCopperInstruments } from "./copper";
 import type { Command, Layer, Pattern, Project, Snapshot } from "./model";
 
 const MAX_TICK = 1_048_576;
@@ -449,6 +450,10 @@ export function validateProject(value: unknown): Project {
       str(c.file, 1024 * 1024);
       num(c.key, 0, 255, true);
       num(c.pressKey, 0, 1, true);
+      if (c.vanillaId !== undefined) {
+        num(c.vanillaId,16,19,true);
+        if (getNbsEventKind(c.name as string)) fail('控制定义不能使用铜号标记');
+      }
     }
     for (const raw of arr(n.layers, 4096)) {
       const l = obj(raw);
@@ -921,6 +926,9 @@ export class Session {
           p.clips = p.clips.filter(
             (c) => c.kind !== "sample" || c.sourceId !== command.id,
           );
+          break;
+        case "instrument:addCopper":
+          addCopperInstruments(p);
           break;
         case "instrument:update":
           Object.assign(find(p.instruments, command.id), command.patch);

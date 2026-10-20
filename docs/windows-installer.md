@@ -1,6 +1,6 @@
 # Windows 安装与卸载说明
 
-安装版与免安装版使用相同的 0.5.7 编辑器。安装包采用 electron-builder 的 NSIS 向导，内含完整程序与 Electron 运行环境；目标为 Windows x64，无需安装 Node.js，安装时不必联网下载程序。
+安装版与免安装版使用相同的 0.5.8 编辑器。安装包采用 electron-builder 的 NSIS 向导，内含完整程序与 Electron 运行环境；目标为 Windows x64，无需安装 Node.js，安装时不必联网下载程序。
 
 ## 双击 Setup 后发生什么
 

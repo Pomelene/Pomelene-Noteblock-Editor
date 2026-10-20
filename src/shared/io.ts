@@ -1,4 +1,5 @@
 import { getNbsEventKind } from "./nbsEvents";
+import { bindCopperSamples, copperForSample } from "./copper";
 import { decodeNbs, encodeNbs, getNbsExportWarnings } from "../legacy/nbs";
 import type { NbsMetadata, NbsProject } from "../legacy/nbs";
 import type { Project as LegacyProject } from "../legacy/project";
@@ -100,7 +101,7 @@ function migrate(old: LegacyProject & { nbs?: NbsMetadata }): Project {
       16,
     ),
   };
-  return validateProject(p);
+  return validateProject(bindCopperSamples(p));
 }
 export function fromNbs(data: Uint8Array): Project {
   return migrate(decodeNbs(data));
@@ -108,7 +109,7 @@ export function fromNbs(data: Uint8Array): Project {
 export function decodeProject(bytes: Uint8Array, filename?: string): Project {
   if (!(bytes instanceof Uint8Array) || bytes.byteLength > MAX_PROJECT_BYTES)
     throw new Error("工程文件超过 96 MiB 限制");
-  if (isProjectContainer(bytes)) return decodeProjectV2(bytes);
+  if (isProjectContainer(bytes)) return bindCopperSamples(decodeProjectV2(bytes));
   if (filename?.toLowerCase().endsWith(".nbs")) return fromNbs(bytes);
   if (
     filename?.toLowerCase().endsWith(".nbproject") ||
@@ -120,7 +121,7 @@ export function decodeProject(bytes: Uint8Array, filename?: string): Project {
 export function encodeProject(project: Project): Uint8Array {
   return encodeProjectV2(project);
 }
-export function toNbs(input: Project): {
+export function toNbs(input: Project, version: 5 | 6 = 5): {
   data: Uint8Array;
   warnings: string[];
 } {
@@ -147,8 +148,9 @@ export function toNbs(input: Project): {
     const destination = old ? index : definitions.length;
     customIds.set(i.id, 16 + destination);
     definitions[destination] = {
+      ...(copperForSample(sample) ? {vanillaId:copperForSample(sample)!.id} : {}),
       name: i.name,
-      file: sample.originalPath ?? old?.file ?? `${sample.name}.wav`,
+      file: copperForSample(sample) ? `minecraft/${copperForSample(sample)!.file}.ogg` : sample.originalPath ?? old?.file ?? `${sample.name}.wav`,
       key: i.key,
       pressKey: Number(i.pressKey),
     };
@@ -322,5 +324,7 @@ export function toNbs(input: Project): {
       "NBS 只支持整数 tick；细分网格和三连音时间已四舍五入到最近的 tick。",
     );
   warnings.push(...getNbsExportWarnings(legacy));
-  return { data: encodeNbs(legacy), warnings };
+  if (version===5 && definitions.some(d=>d.vanillaId!==undefined)) warnings.push('NBS v5 不支持原生铜号：铜号已作为自定义乐器保留，请同时使用“导出乐器采样包”并与歌曲一同分发；原生铜号请选 v6。');
+  if (version===6 && definitions.some(d=>d.vanillaId!==undefined && (d.key!==45 || d.pressKey!==0))) warnings.push('改变 NBS 调音或按键设置的铜号将保留为自定义乐器，请同时导出乐器采样包。');
+  return { data: encodeNbs(legacy,version), warnings };
 }

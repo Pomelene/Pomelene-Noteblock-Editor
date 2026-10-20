@@ -13,7 +13,7 @@
 当前提供 **Windows x64 安装包**，内含运行环境，无需安装 Node.js 或其他开发工具。
 
 1. 打开 **[最新版本下载页](https://github.com/Pomelene/Pomelene-Noteblock-Editor/releases/latest)**。
-2. 在页面底部的 **Assets（附件）** 中，下载名称以 **`Setup-x64.exe`** 结尾的安装包，例如 `PomeleneNoteblockEditor-0.5.7-Setup-x64.exe`。
+2. 在页面底部的 **Assets（附件）** 中，下载名称以 **`Setup-x64.exe`** 结尾的安装包，例如 `PomeleneNoteblockEditor-0.5.8-Setup-x64.exe`。
 3. 双击安装包，按向导选择安装位置。选择父目录即可，安装器会自动在其下创建 `Pomelene Noteblock Editor` 文件夹。
 4. 安装完成后，通过桌面或开始菜单中的 **Pomelene Noteblock Editor** 快捷方式启动。
 
@@ -59,9 +59,9 @@
 
 ### 文件兼容与开发进度
 
-- 支持读取 **NBS v0–6**，导出 **NBS v5**。v6 新铜号需要对应音频资源。
+- 支持读取 **NBS v0–6**，可选择导出 **NBS v5 或 v6**。四种铜号音频已内置，v6 使用原生音色编号；v5 通过自定义乐器采样包兼容。
 - 工程使用带版本标签的 **v2 `.nbproject`** 格式，不读取早期 JSON 工程。
 - 智能整理仍在持续改进，复杂声部与跨小节主题可能需要手动调整。
 - MIDI 智能转换、鼓点素材库和半自动丰富听感目前尚未实现。
 
-更多内容：[使用说明](resources/使用说明.txt) · [0.5.7 发布说明](docs/release-0.5.7.md) · [开发指南](docs/development.md) · [参考资料](docs/reference-notes.md)
+更多内容：[使用说明](resources/使用说明.txt) · [0.5.8 发布说明](docs/release-0.5.8.md) · [开发指南](docs/development.md) · [参考资料](docs/reference-notes.md)
